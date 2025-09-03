@@ -186,6 +186,11 @@ async def get_professional_profile(user_id: str):
     profile = await db.professional_profiles.find_one({"user_id": user_id})
     if not profile:
         raise HTTPException(status_code=404, detail="Professional profile not found")
+    
+    # Convert ObjectId to string for JSON serialization
+    if "_id" in profile:
+        profile["_id"] = str(profile["_id"])
+    
     return profile
 
 @api_router.get("/profile/client/{user_id}")
@@ -193,6 +198,11 @@ async def get_client_profile(user_id: str):
     profile = await db.client_profiles.find_one({"user_id": user_id})
     if not profile:
         raise HTTPException(status_code=404, detail="Client profile not found")
+    
+    # Convert ObjectId to string for JSON serialization
+    if "_id" in profile:
+        profile["_id"] = str(profile["_id"])
+    
     return profile
 
 @api_router.get("/categories")
