@@ -199,6 +199,11 @@ async def get_client_profile(user_id: str):
 async def get_service_categories():
     return {"categories": SERVICE_CATEGORIES}
 
+# Root endpoint
+@api_router.get("/")
+async def root():
+    return {"message": "WorkMe API is running", "status": "healthy"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
