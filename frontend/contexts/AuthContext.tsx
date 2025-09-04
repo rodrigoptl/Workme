@@ -28,6 +28,7 @@ interface RegisterData {
   full_name: string;
   phone: string;
   user_type: 'client' | 'professional';
+  beta_access_code?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
