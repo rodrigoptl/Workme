@@ -111,6 +111,11 @@ function MainStack() {
         }}
       />
       <Stack.Screen 
+        name="SmartSearch" 
+        component={SmartSearchScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
         name="Documents" 
         component={DocumentsScreen}
         options={{ headerShown: false }}
