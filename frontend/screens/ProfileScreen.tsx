@@ -11,7 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function ProfileScreen() {
+interface ProfileScreenProps {
+  navigation: any;
+}
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
