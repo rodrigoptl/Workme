@@ -537,12 +537,19 @@ class WorkMeAPITester:
             headers = {"Authorization": f"Bearer {self.auth_token}"}
             
             # Create a booking (should fail with insufficient balance)
+            from datetime import datetime, timedelta
+            future_date = (datetime.now() + timedelta(days=7)).isoformat()
+            
             booking_data = {
+                "id": str(__import__('uuid').uuid4()),
+                "client_id": self.test_user_client["id"],
                 "professional_id": self.test_user_professional["id"],
                 "service_category": "Limpeza & Diarista",
                 "description": "Limpeza completa do apartamento",
                 "amount": 150.0,
-                "scheduled_date": "2024-12-25T10:00:00"
+                "status": "pending",
+                "payment_status": "pending",
+                "scheduled_date": future_date
             }
             
             response = self.session.post(f"{self.base_url}/booking/create", json=booking_data, headers=headers)
