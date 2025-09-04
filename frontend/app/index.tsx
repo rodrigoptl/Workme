@@ -16,6 +16,7 @@ import DocumentsScreen from '../screens/DocumentsScreen';
 import PortfolioScreen from '../screens/PortfolioScreen';
 import ProfessionalProfileScreen from '../screens/ProfessionalProfileScreen';
 import AdminScreen from '../screens/AdminScreen';
+import BetaAdminScreen from '../screens/BetaAdminScreen';
 import SmartSearchScreen from '../screens/SmartSearchScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
