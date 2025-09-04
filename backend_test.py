@@ -1798,6 +1798,16 @@ class WorkMeAPITester:
             self.test_fetch_user_bookings
         ]
         
+        # AI Matching System tests
+        ai_tests = [
+            self.test_ai_match_professionals,
+            self.test_ai_smart_search,
+            self.test_ai_search_suggestions,
+            self.test_ai_error_handling_fallback,
+            self.test_ai_integration_with_verified_professionals,
+            self.test_ai_scoring_algorithm
+        ]
+        
         # Payment system tests (existing)
         payment_tests = [
             self.test_wallet_management,
