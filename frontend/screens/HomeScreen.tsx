@@ -20,6 +20,18 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleBookDemo = () => {
+    // Demo booking with mock professional
+    const mockProfessional = {
+      id: 'demo-professional-123',
+      name: 'João Silva',
+      category: 'Casa & Construção',
+      price: 'R$ 80,00'
+    };
+    
+    navigation.navigate('Booking', { professional: mockProfessional });
+  };
+
   const renderClientHomeContent = () => (
     <View style={styles.clientContainer}>
       <Text style={styles.welcomeText}>Olá, {user?.full_name}!</Text>
@@ -51,6 +63,15 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+
+      {/* Demo Booking Section */}
+      <View style={styles.demoSection}>
+        <Text style={styles.sectionTitle}>Teste o Sistema</Text>
+        <TouchableOpacity style={styles.demoButton} onPress={handleBookDemo}>
+          <Ionicons name="play-circle" size={20} color="#FFFFFF" />
+          <Text style={styles.demoButtonText}>Testar Contratação de Serviço</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.recentSection}>
