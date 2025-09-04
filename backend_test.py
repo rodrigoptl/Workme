@@ -1410,7 +1410,7 @@ class WorkMeAPITester:
     
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print(f"🚀 Starting WorkMe API Tests - Phase 2 Comprehensive System")
+        print(f"🚀 Starting WorkMe Beta Preparation - Complete End-to-End Journey Testing")
         print(f"Backend URL: {self.base_url}")
         print("=" * 80)
         
@@ -1470,6 +1470,21 @@ class WorkMeAPITester:
             self.test_withdrawal_functionality,
             self.test_transaction_history,
             self.test_service_booking_escrow
+        ]
+        
+        # END-TO-END JOURNEY TESTS
+        journey_tests = [
+            self.test_complete_client_journey,
+            self.test_complete_professional_journey,
+            self.test_complete_admin_journey
+        ]
+        
+        # INTEGRATION TESTS
+        integration_tests = [
+            self.test_wallet_integration_flow,
+            self.test_payment_calculations,
+            self.test_profile_completion_calculation,
+            self.test_search_and_discovery_integration
         ]
         
         all_tests = auth_tests + document_tests + portfolio_tests + profile_tests + admin_tests + search_tests + booking_tests + payment_tests
@@ -1541,8 +1556,35 @@ class WorkMeAPITester:
                 passed += 1
             print()
         
+        # Run End-to-End Journey Tests
+        print("\n" + "=" * 80)
+        print("🎯 RUNNING END-TO-END JOURNEY TESTS")
         print("=" * 80)
-        print(f"📊 Test Results: {passed}/{total} tests passed")
+        
+        journey_passed = 0
+        for test in journey_tests:
+            if test():
+                journey_passed += 1
+            print()
+        
+        # Run Integration Tests
+        print("\n" + "=" * 80)
+        print("🔗 RUNNING INTEGRATION TESTS")
+        print("=" * 80)
+        
+        integration_passed = 0
+        for test in integration_tests:
+            if test():
+                integration_passed += 1
+            print()
+        
+        total_journey_integration = len(journey_tests) + len(integration_tests)
+        total_journey_integration_passed = journey_passed + integration_passed
+        
+        print("=" * 80)
+        print(f"📊 COMPREHENSIVE TEST RESULTS")
+        print("=" * 80)
+        print(f"API Tests: {passed}/{total} tests passed")
         print(f"   - Authentication: {min(passed, len(auth_tests))}/{len(auth_tests)} tests passed")
         print(f"   - Document Management: {max(0, min(passed - len(auth_tests), len(document_tests)))}/{len(document_tests)} tests passed")
         print(f"   - Portfolio Management: {max(0, min(passed - len(auth_tests) - len(document_tests), len(portfolio_tests)))}/{len(portfolio_tests)} tests passed")
@@ -1552,12 +1594,34 @@ class WorkMeAPITester:
         print(f"   - Enhanced Booking: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests), len(booking_tests)))}/{len(booking_tests)} tests passed")
         print(f"   - Payment System: {max(0, passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests) - len(booking_tests))}/{len(payment_tests)} tests passed")
         
-        if passed == total:
-            print("🎉 All tests passed! WorkMe Phase 2 system is working correctly.")
-        else:
-            print("⚠️  Some tests failed. Check the details above.")
+        print(f"\nEnd-to-End Journey Tests: {journey_passed}/{len(journey_tests)} tests passed")
+        print(f"   - Client Journey: {'✅' if journey_passed >= 1 else '❌'}")
+        print(f"   - Professional Journey: {'✅' if journey_passed >= 2 else '❌'}")
+        print(f"   - Admin Journey: {'✅' if journey_passed >= 3 else '❌'}")
         
-        return passed == total
+        print(f"\nIntegration Tests: {integration_passed}/{len(integration_tests)} tests passed")
+        print(f"   - Wallet Integration: {'✅' if integration_passed >= 1 else '❌'}")
+        print(f"   - Payment Calculations: {'✅' if integration_passed >= 2 else '❌'}")
+        print(f"   - Profile Completion: {'✅' if integration_passed >= 3 else '❌'}")
+        print(f"   - Search Integration: {'✅' if integration_passed >= 4 else '❌'}")
+        
+        total_all_tests = total + total_journey_integration
+        total_all_passed = passed + total_journey_integration_passed
+        
+        print(f"\n🎯 OVERALL BETA READINESS: {total_all_passed}/{total_all_tests} tests passed")
+        
+        if total_all_passed == total_all_tests:
+            print("🎉 ALL TESTS PASSED! WorkMe is READY for BETA launch!")
+            print("✅ Complete user journeys verified")
+            print("✅ All integrations working correctly")
+            print("✅ Payment system fully functional")
+            print("✅ Admin workflows operational")
+        else:
+            print("⚠️  Some tests failed. Beta readiness requires attention.")
+            failed_count = total_all_tests - total_all_passed
+            print(f"❌ {failed_count} test(s) need to be addressed before beta launch")
+        
+        return total_all_passed == total_all_tests
 
 if __name__ == "__main__":
     tester = WorkMeAPITester()
