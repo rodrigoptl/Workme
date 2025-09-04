@@ -89,6 +89,26 @@ function MainTabs() {
   );
 }
 
+function MainStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="MainTabs" 
+        component={MainTabs} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Booking" 
+        component={BookingScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'modal'
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 function AppContent() {
   const { user, loading } = useAuth();
 
