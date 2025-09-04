@@ -27,12 +27,22 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Beta Environment Configuration
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+BETA_ACCESS_CODE = os.getenv("BETA_ACCESS_CODE", "WORKME2025BETA")
+MAX_BETA_USERS = int(os.getenv("MAX_BETA_USERS", "50"))
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@workme.com.br")
+
 # Stripe configuration (Test keys for development)
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "sk_test_51234567890abcdef...")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "pk_test_51234567890abcdef...")
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="WorkMe API - Beta Environment" if ENVIRONMENT == "beta" else "WorkMe API",
+    description="Conectando clientes e profissionais - Ambiente Beta" if ENVIRONMENT == "beta" else "Conectando clientes e profissionais",
+    version="1.0.0-beta" if ENVIRONMENT == "beta" else "1.0.0"
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -54,11 +64,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    beta_access_code: Optional[str] = None  # Required for beta environment
 
 class User(UserBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = True
+    is_beta_user: bool = False
+    beta_joined_at: Optional[datetime] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -68,6 +81,65 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: User
+
+# Beta Test Models
+class BetaInvite(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invite_code: str
+    email: Optional[str] = None
+    max_uses: int = 1
+    used_count: int = 0
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+class BetaFeedback(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    screen_name: str
+    feedback_type: str  # "bug", "suggestion", "complaint", "praise"
+    rating: Optional[int] = None  # 1-5 scale
+    message: str
+    screenshot_data: Optional[str] = None  # base64 encoded
+    device_info: dict = {}
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserAnalytics(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    session_id: str
+    event_type: str  # "screen_view", "button_click", "form_submit", "error", "app_open", "app_close"
+    screen_name: Optional[str] = None
+    action_name: Optional[str] = None
+    properties: dict = {}
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class BetaStats(BaseModel):
+    total_beta_users: int
+    active_sessions_today: int
+    total_feedback_count: int
+    average_session_time: float
+    top_screens: List[dict]
+    conversion_funnel: dict
+    error_rate: float
+
+# Feedback Models
+class FeedbackSubmission(BaseModel):
+    screen_name: str
+    feedback_type: str
+    rating: Optional[int] = None
+    message: str
+    screenshot_data: Optional[str] = None
+    device_info: dict = {}
+
+# Analytics Models
+class AnalyticsEvent(BaseModel):
+    session_id: str
+    event_type: str
+    screen_name: Optional[str] = None
+    action_name: Optional[str] = None
+    properties: dict = {}
 
 # Document Models
 class DocumentUpload(BaseModel):
@@ -223,6 +295,31 @@ class BookingReview(BaseModel):
     rating: int  # 1-5
     review: str
 
+# AI Matching Models
+class AIMatchingRequest(BaseModel):
+    client_request: str  # Natural language description of what client needs
+    location: Optional[str] = None
+    budget_range: Optional[str] = None
+    urgency: Optional[str] = "normal"  # "urgent", "normal", "flexible"
+    preferred_time: Optional[str] = None
+
+class MatchingScore(BaseModel):
+    professional_id: str
+    score: float
+    reasoning: str
+    match_factors: dict
+
+class AIMatchingResponse(BaseModel):
+    matches: List[MatchingScore]
+    search_interpretation: str
+    suggestions: List[str]
+
+# Smart Search Models
+class SmartSearchRequest(BaseModel):
+    query: str
+    location: Optional[str] = None
+    limit: int = 10
+
 # Service Categories
 SERVICE_CATEGORIES = [
     "Casa & Construção",
@@ -307,9 +404,238 @@ def calculate_profile_completion(profile: dict, documents: list, portfolio_items
     
     return min(score / total_points * 100, 100.0)
 
-# Auth Routes
+async def log_user_analytics(user_id: str, session_id: str, event_type: str, 
+                           screen_name: str = None, action_name: str = None, properties: dict = {}):
+    """Log user analytics event"""
+    analytics_event = UserAnalytics(
+        user_id=user_id,
+        session_id=session_id,
+        event_type=event_type,
+        screen_name=screen_name,
+        action_name=action_name,
+        properties=properties
+    )
+    
+    await db.user_analytics.insert_one(analytics_event.dict())
+
+# Beta Environment Routes
+@api_router.get("/beta/environment")
+async def get_beta_environment():
+    """Get beta environment information"""
+    beta_users_count = await db.users.count_documents({"is_beta_user": True})
+    
+    return {
+        "environment": ENVIRONMENT,
+        "is_beta": ENVIRONMENT == "beta",
+        "beta_users_count": beta_users_count,
+        "max_beta_users": MAX_BETA_USERS,
+        "beta_spots_remaining": max(0, MAX_BETA_USERS - beta_users_count),
+        "version": "1.0.0-beta"
+    }
+
+@api_router.post("/beta/validate-access")
+async def validate_beta_access(access_code: str):
+    """Validate beta access code"""
+    if ENVIRONMENT != "beta":
+        return {"valid": True, "message": "Beta validation not required in this environment"}
+    
+    if access_code == BETA_ACCESS_CODE:
+        beta_users_count = await db.users.count_documents({"is_beta_user": True})
+        if beta_users_count < MAX_BETA_USERS:
+            return {"valid": True, "message": "Código de acesso válido"}
+        else:
+            return {"valid": False, "message": "Limite de usuários beta atingido"}
+    else:
+        return {"valid": False, "message": "Código de acesso inválido"}
+
+# Beta Analytics Routes
+@api_router.post("/beta/analytics/track")
+async def track_analytics_event(
+    event: AnalyticsEvent,
+    current_user: User = Depends(get_current_user)
+):
+    """Track user analytics event"""
+    await log_user_analytics(
+        user_id=current_user.id,
+        session_id=event.session_id,
+        event_type=event.event_type,
+        screen_name=event.screen_name,
+        action_name=event.action_name,
+        properties=event.properties
+    )
+    
+    return {"status": "success", "message": "Event tracked"}
+
+@api_router.post("/beta/feedback/submit")
+async def submit_feedback(
+    feedback: FeedbackSubmission,
+    current_user: User = Depends(get_current_user)
+):
+    """Submit user feedback"""
+    beta_feedback = BetaFeedback(
+        user_id=current_user.id,
+        screen_name=feedback.screen_name,
+        feedback_type=feedback.feedback_type,
+        rating=feedback.rating,
+        message=feedback.message,
+        screenshot_data=feedback.screenshot_data,
+        device_info=feedback.device_info
+    )
+    
+    await db.beta_feedback.insert_one(beta_feedback.dict())
+    
+    return {"status": "success", "message": "Feedback enviado com sucesso"}
+
+# Beta Admin Routes
+@api_router.get("/beta/admin/stats")
+async def get_beta_stats(current_user: User = Depends(get_current_user)):
+    """Get comprehensive beta testing statistics"""
+    # TODO: Add admin role check
+    
+    try:
+        # Basic counts
+        total_beta_users = await db.users.count_documents({"is_beta_user": True})
+        total_feedback = await db.beta_feedback.count_documents({})
+        
+        # Recent activity (last 24 hours)
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        active_sessions_today = await db.user_analytics.count_documents({
+            "timestamp": {"$gte": yesterday},
+            "event_type": "app_open"
+        })
+        
+        # Top screens by visits
+        screen_visits_pipeline = [
+            {"$match": {"event_type": "screen_view"}},
+            {"$group": {"_id": "$screen_name", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        top_screens_cursor = db.user_analytics.aggregate(screen_visits_pipeline)
+        top_screens = await top_screens_cursor.to_list(10)
+        
+        # Feedback breakdown
+        feedback_pipeline = [
+            {"$group": {"_id": "$feedback_type", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]
+        feedback_breakdown_cursor = db.beta_feedback.aggregate(feedback_pipeline)
+        feedback_breakdown = await feedback_breakdown_cursor.to_list(10)
+        
+        # Error rate (approximate)
+        total_events = await db.user_analytics.count_documents({})
+        error_events = await db.user_analytics.count_documents({"event_type": "error"})
+        error_rate = (error_events / max(total_events, 1)) * 100
+        
+        # Conversion funnel (simplified)
+        registered_users = await db.users.count_documents({"is_beta_user": True})
+        completed_profiles = await db.professional_profiles.count_documents({"verification_status": "verified"})
+        completed_bookings = await db.bookings.count_documents({"status": "completed"})
+        
+        conversion_funnel = {
+            "registered": registered_users,
+            "verified_professionals": completed_profiles,
+            "completed_bookings": completed_bookings,
+            "registration_to_verification": (completed_profiles / max(registered_users, 1)) * 100,
+            "verification_to_booking": (completed_bookings / max(completed_profiles, 1)) * 100
+        }
+        
+        return {
+            "total_beta_users": total_beta_users,
+            "active_sessions_today": active_sessions_today,
+            "total_feedback_count": total_feedback,
+            "average_session_time": 5.5,  # Mock for now
+            "top_screens": top_screens,
+            "feedback_breakdown": feedback_breakdown,
+            "conversion_funnel": conversion_funnel,
+            "error_rate": round(error_rate, 2)
+        }
+        
+    except Exception as e:
+        logger.error(f"Beta stats error: {str(e)}")
+        return {"error": "Unable to fetch beta stats", "details": str(e)}
+
+@api_router.get("/beta/admin/feedback")
+async def get_beta_feedback(
+    limit: int = 50,
+    feedback_type: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get beta feedback with filtering"""
+    # TODO: Add admin role check
+    
+    query = {}
+    if feedback_type:
+        query["feedback_type"] = feedback_type
+    
+    feedback_list = await db.beta_feedback.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    # Enrich with user data
+    enriched_feedback = []
+    for feedback in feedback_list:
+        if "_id" in feedback:
+            feedback["_id"] = str(feedback["_id"])
+        
+        # Get user info
+        user = await db.users.find_one({"id": feedback["user_id"]})
+        if user:
+            feedback["user_name"] = user.get("full_name")
+            feedback["user_email"] = user.get("email")
+            feedback["user_type"] = user.get("user_type")
+        
+        enriched_feedback.append(feedback)
+    
+    return {"feedback": enriched_feedback}
+
+@api_router.get("/beta/admin/users")
+async def get_beta_users(current_user: User = Depends(get_current_user)):
+    """Get list of beta users with activity data"""
+    # TODO: Add admin role check
+    
+    beta_users = await db.users.find({"is_beta_user": True}).sort("beta_joined_at", -1).to_list(100)
+    
+    # Enrich with activity data
+    enriched_users = []
+    for user in beta_users:
+        if "_id" in user:
+            user["_id"] = str(user["_id"])
+        
+        # Get last activity
+        last_activity = await db.user_analytics.find_one(
+            {"user_id": user["id"]},
+            sort=[("timestamp", -1)]
+        )
+        
+        # Get session count
+        session_count = await db.user_analytics.count_documents({
+            "user_id": user["id"],
+            "event_type": "app_open"
+        })
+        
+        # Get feedback count
+        feedback_count = await db.beta_feedback.count_documents({"user_id": user["id"]})
+        
+        user["last_activity"] = last_activity.get("timestamp") if last_activity else None
+        user["session_count"] = session_count
+        user["feedback_count"] = feedback_count
+        
+        enriched_users.append(user)
+    
+    return {"beta_users": enriched_users}
+
+# Auth Routes (Enhanced for Beta)
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
+    # Beta environment validation
+    if ENVIRONMENT == "beta":
+        if not user_data.beta_access_code or user_data.beta_access_code != BETA_ACCESS_CODE:
+            raise HTTPException(status_code=403, detail="Código de acesso beta necessário")
+        
+        # Check beta user limit
+        beta_users_count = await db.users.count_documents({"is_beta_user": True})
+        if beta_users_count >= MAX_BETA_USERS:
+            raise HTTPException(status_code=403, detail="Limite de usuários beta atingido")
+    
     # Check if user already exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
@@ -319,8 +645,16 @@ async def register(user_data: UserCreate):
     hashed_password = get_password_hash(user_data.password)
     user_dict = user_data.dict()
     del user_dict["password"]
+    if "beta_access_code" in user_dict:
+        del user_dict["beta_access_code"]
     
     user_obj = User(**user_dict)
+    
+    # Set beta user flag
+    if ENVIRONMENT == "beta":
+        user_obj.is_beta_user = True
+        user_obj.beta_joined_at = datetime.utcnow()
+    
     user_dict_with_password = user_obj.dict()
     user_dict_with_password["hashed_password"] = hashed_password
     
@@ -1235,31 +1569,6 @@ async def review_booking(
     
     return {"status": "success", "message": "Review submitted successfully"}
 
-# AI Matching Models
-class AIMatchingRequest(BaseModel):
-    client_request: str  # Natural language description of what client needs
-    location: Optional[str] = None
-    budget_range: Optional[str] = None
-    urgency: Optional[str] = "normal"  # "urgent", "normal", "flexible"
-    preferred_time: Optional[str] = None
-
-class MatchingScore(BaseModel):
-    professional_id: str
-    score: float
-    reasoning: str
-    match_factors: dict
-
-class AIMatchingResponse(BaseModel):
-    matches: List[MatchingScore]
-    search_interpretation: str
-    suggestions: List[str]
-
-# Smart Search Models
-class SmartSearchRequest(BaseModel):
-    query: str
-    location: Optional[str] = None
-    limit: int = 10
-
 # AI Matching Routes using Emergent LLM
 @api_router.post("/ai/match-professionals", response_model=AIMatchingResponse)
 async def ai_match_professionals(
@@ -1523,7 +1832,13 @@ async def get_search_suggestions():
 # Root endpoint
 @api_router.get("/")
 async def root():
-    return {"message": "WorkMe API is running", "status": "healthy", "ai_enabled": True}
+    return {
+        "message": "WorkMe API is running", 
+        "status": "healthy", 
+        "environment": ENVIRONMENT,
+        "ai_enabled": True,
+        "version": "1.0.0-beta" if ENVIRONMENT == "beta" else "1.0.0"
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
