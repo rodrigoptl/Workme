@@ -23,8 +23,21 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user } = useAuth();
+  const { trackEvent } = useBeta();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Track screen view
+    trackEvent('screen_view', 'HomeScreen');
+  }, []);
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      trackEvent('button_click', 'HomeScreen', 'search', { query: searchQuery });
+      navigation.navigate('SmartSearch', { query: searchQuery });
+    }
+  };
 
   const handleBookDemo = () => {
     // Demo booking with mock professional
