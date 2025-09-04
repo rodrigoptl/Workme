@@ -2178,6 +2178,16 @@ class WorkMeAPITester:
             self.test_ai_scoring_algorithm
         ]
         
+        # Beta Environment tests
+        beta_tests = [
+            self.test_beta_environment_info,
+            self.test_beta_analytics_tracking,
+            self.test_beta_feedback_submission,
+            self.test_beta_admin_stats,
+            self.test_beta_admin_feedback,
+            self.test_beta_admin_users
+        ]
+        
         # Payment system tests (existing)
         payment_tests = [
             self.test_wallet_management,
