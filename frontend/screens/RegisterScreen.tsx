@@ -25,22 +25,26 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     full_name: '',
     phone: '',
     user_type: 'client' as 'client' | 'professional',
+    beta_access_code: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
 
   const handleRegister = async () => {
-    if (!formData.email || !formData.password || !formData.full_name || !formData.phone) {
+    if (!formData.email || !formData.password || !formData.full_name || !formData.phone || !formData.beta_access_code) {
       return;
     }
 
     setLoading(true);
-    const success = await register(formData);
+    const success = await register({
+      ...formData,
+      beta_access_code: formData.beta_access_code,
+    });
     setLoading(false);
   };
 
-  const isFormValid = formData.email && formData.password && formData.full_name && formData.phone;
+  const isFormValid = formData.email && formData.password && formData.full_name && formData.phone && formData.beta_access_code;
 
   return (
     <SafeAreaView style={styles.container}>
