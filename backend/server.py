@@ -14,6 +14,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 import bcrypt
 import stripe
+import base64
 from decimal import Decimal
 
 ROOT_DIR = Path(__file__).parent
@@ -66,21 +67,96 @@ class Token(BaseModel):
     token_type: str
     user: User
 
+# Document Models
+class DocumentUpload(BaseModel):
+    document_type: str  # "rg_front", "rg_back", "cpf", "address_proof", "certificate", "selfie"
+    file_data: str  # base64 encoded
+    file_name: str
+    description: Optional[str] = None
+
+class Document(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    document_type: str
+    file_data: str  # base64 encoded
+    file_name: str
+    description: Optional[str] = None
+    status: str = "pending"  # "pending", "approved", "rejected"
+    admin_notes: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+
+# Portfolio Models
+class PortfolioItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    title: str
+    description: str
+    image_data: str  # base64 encoded
+    category: str
+    work_date: Optional[datetime] = None
+    client_feedback: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PortfolioUpload(BaseModel):
+    title: str
+    description: str
+    image_data: str  # base64 encoded
+    category: str
+    work_date: Optional[str] = None
+    client_feedback: Optional[str] = None
+
+# Enhanced Professional Profile
+class ProfessionalProfileUpdate(BaseModel):
+    bio: Optional[str] = None
+    services: List[str] = []
+    specialties: List[str] = []
+    experience_years: Optional[int] = None
+    hourly_rate: Optional[float] = None
+    service_radius_km: Optional[int] = None
+    availability_hours: Optional[dict] = None  # {"monday": "9-17", "tuesday": "9-17"}
+    location: Optional[str] = None
+    certifications: List[str] = []
+    languages: List[str] = ["Português"]
+
 class ProfessionalProfile(BaseModel):
     user_id: str
     bio: Optional[str] = None
     services: List[str] = []
-    price_range: Optional[str] = None
-    availability: Optional[str] = None
+    specialties: List[str] = []
+    experience_years: Optional[int] = None
+    hourly_rate: Optional[float] = None
+    service_radius_km: Optional[int] = None
+    availability_hours: Optional[dict] = None
     location: Optional[str] = None
+    certifications: List[str] = []
+    languages: List[str] = ["Português"]
     verification_status: str = "pending"  # "pending", "verified", "rejected"
+    profile_completion: float = 0.0
+    rating: float = 0.0
+    reviews_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class ClientProfile(BaseModel):
     user_id: str
     location: Optional[str] = None
     preferences: List[str] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Verification Models
+class VerificationRequest(BaseModel):
+    user_id: str
+    status: str = "submitted"  # "submitted", "under_review", "approved", "rejected"
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+    admin_notes: Optional[str] = None
+
+class AdminDocumentReview(BaseModel):
+    document_id: str
+    status: str  # "approved", "rejected"
+    admin_notes: Optional[str] = None
 
 # Payment Models
 class Wallet(BaseModel):
@@ -119,6 +195,7 @@ class WithdrawRequest(BaseModel):
     amount: float
     pix_key: str
 
+# Service Booking Models
 class ServiceBooking(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_id: str
@@ -130,8 +207,19 @@ class ServiceBooking(BaseModel):
     payment_status: str  # "pending", "escrowed", "released", "refunded"
     escrow_transaction_id: Optional[str] = None
     scheduled_date: datetime
+    completed_date: Optional[datetime] = None
+    client_rating: Optional[int] = None
+    client_review: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class BookingStatusUpdate(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+class BookingReview(BaseModel):
+    rating: int  # 1-5
+    review: str
 
 # Service Categories
 SERVICE_CATEGORIES = [
@@ -188,6 +276,34 @@ async def get_or_create_wallet(user_id: str):
         await db.wallets.insert_one(wallet.dict())
         return wallet
     return Wallet(**wallet)
+
+def calculate_profile_completion(profile: dict, documents: list, portfolio_items: list) -> float:
+    """Calculate profile completion percentage"""
+    score = 0.0
+    total_points = 10.0
+    
+    # Basic info (3 points)
+    if profile.get("bio"): score += 0.5
+    if profile.get("services"): score += 0.5
+    if profile.get("specialties"): score += 0.5
+    if profile.get("experience_years"): score += 0.5
+    if profile.get("hourly_rate"): score += 0.5
+    if profile.get("location"): score += 0.5
+    
+    # Documents (4 points)
+    required_docs = ["rg_front", "rg_back", "cpf", "address_proof", "selfie"]
+    approved_docs = [doc for doc in documents if doc.get("status") == "approved"]
+    doc_types = [doc.get("document_type") for doc in approved_docs]
+    
+    for doc_type in required_docs:
+        if doc_type in doc_types:
+            score += 0.8
+    
+    # Portfolio (3 points)
+    portfolio_score = min(len(portfolio_items) * 0.5, 3.0)
+    score += portfolio_score
+    
+    return min(score / total_points * 100, 100.0)
 
 # Auth Routes
 @api_router.post("/auth/register", response_model=Token)
@@ -250,7 +366,203 @@ async def login(user_credentials: UserLogin):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
-# Profile Routes
+# Document Upload Routes
+@api_router.post("/documents/upload")
+async def upload_document(
+    document_data: DocumentUpload,
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a document for verification"""
+    try:
+        # Validate document type
+        valid_types = ["rg_front", "rg_back", "cpf", "address_proof", "certificate", "selfie"]
+        if document_data.document_type not in valid_types:
+            raise HTTPException(status_code=400, detail="Invalid document type")
+        
+        # Check if document already exists
+        existing_doc = await db.documents.find_one({
+            "user_id": current_user.id,
+            "document_type": document_data.document_type
+        })
+        
+        if existing_doc:
+            # Update existing document
+            await db.documents.update_one(
+                {"_id": existing_doc["_id"]},
+                {
+                    "$set": {
+                        "file_data": document_data.file_data,
+                        "file_name": document_data.file_name,
+                        "description": document_data.description,
+                        "status": "pending",
+                        "uploaded_at": datetime.utcnow(),
+                        "admin_notes": None,
+                        "reviewed_at": None
+                    }
+                }
+            )
+            doc_id = str(existing_doc["_id"])
+        else:
+            # Create new document
+            document = Document(
+                user_id=current_user.id,
+                document_type=document_data.document_type,
+                file_data=document_data.file_data,
+                file_name=document_data.file_name,
+                description=document_data.description
+            )
+            
+            result = await db.documents.insert_one(document.dict())
+            doc_id = str(result.inserted_id)
+        
+        return {"status": "success", "document_id": doc_id, "message": "Document uploaded successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.get("/documents/{user_id}")
+async def get_user_documents(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all documents for a user"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    documents = await db.documents.find({"user_id": user_id}).to_list(100)
+    
+    # Convert ObjectId to string and remove file_data for list view
+    for doc in documents:
+        if "_id" in doc:
+            doc["_id"] = str(doc["_id"])
+        # Remove file_data to reduce response size
+        if "file_data" in doc:
+            doc["has_file"] = True
+            del doc["file_data"]
+    
+    return {"documents": documents}
+
+@api_router.get("/documents/view/{document_id}")
+async def get_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific document with file data"""
+    try:
+        from bson import ObjectId
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+    except:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Check access permissions
+    if document["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Convert ObjectId to string
+    if "_id" in document:
+        document["_id"] = str(document["_id"])
+    
+    return document
+
+# Portfolio Routes
+@api_router.post("/portfolio/upload")
+async def upload_portfolio_item(
+    portfolio_data: PortfolioUpload,
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a portfolio item"""
+    if current_user.user_type != "professional":
+        raise HTTPException(status_code=403, detail="Only professionals can upload portfolio items")
+    
+    try:
+        portfolio_item = PortfolioItem(
+            user_id=current_user.id,
+            title=portfolio_data.title,
+            description=portfolio_data.description,
+            image_data=portfolio_data.image_data,
+            category=portfolio_data.category,
+            work_date=datetime.fromisoformat(portfolio_data.work_date) if portfolio_data.work_date else None,
+            client_feedback=portfolio_data.client_feedback
+        )
+        
+        result = await db.portfolio.insert_one(portfolio_item.dict())
+        
+        return {
+            "status": "success", 
+            "portfolio_id": str(result.inserted_id),
+            "message": "Portfolio item uploaded successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.get("/portfolio/{user_id}")
+async def get_user_portfolio(user_id: str):
+    """Get portfolio items for a professional"""
+    portfolio_items = await db.portfolio.find({"user_id": user_id}).sort("created_at", -1).to_list(50)
+    
+    # Convert ObjectId to string
+    for item in portfolio_items:
+        if "_id" in item:
+            item["_id"] = str(item["_id"])
+    
+    return {"portfolio": portfolio_items}
+
+@api_router.delete("/portfolio/{portfolio_id}")
+async def delete_portfolio_item(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a portfolio item"""
+    try:
+        from bson import ObjectId
+        item = await db.portfolio.find_one({"_id": ObjectId(portfolio_id)})
+    except:
+        raise HTTPException(status_code=404, detail="Portfolio item not found")
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Portfolio item not found")
+    
+    if item["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    await db.portfolio.delete_one({"_id": ObjectId(portfolio_id)})
+    
+    return {"status": "success", "message": "Portfolio item deleted"}
+
+# Enhanced Profile Routes
+@api_router.put("/profile/professional")
+async def update_professional_profile(
+    profile_data: ProfessionalProfileUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update professional profile"""
+    if current_user.user_type != "professional":
+        raise HTTPException(status_code=403, detail="Only professionals can update professional profile")
+    
+    update_data = profile_data.dict(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow()
+    
+    # Calculate profile completion
+    existing_profile = await db.professional_profiles.find_one({"user_id": current_user.id})
+    documents = await db.documents.find({"user_id": current_user.id}).to_list(100)
+    portfolio_items = await db.portfolio.find({"user_id": current_user.id}).to_list(100)
+    
+    # Merge existing profile with updates
+    merged_profile = {**existing_profile, **update_data}
+    completion = calculate_profile_completion(merged_profile, documents, portfolio_items)
+    update_data["profile_completion"] = completion
+    
+    await db.professional_profiles.update_one(
+        {"user_id": current_user.id},
+        {"$set": update_data}
+    )
+    
+    return {"status": "success", "profile_completion": completion}
+
 @api_router.get("/profile/professional/{user_id}")
 async def get_professional_profile(user_id: str):
     profile = await db.professional_profiles.find_one({"user_id": user_id})
@@ -260,6 +572,24 @@ async def get_professional_profile(user_id: str):
     # Convert ObjectId to string for JSON serialization
     if "_id" in profile:
         profile["_id"] = str(profile["_id"])
+    
+    # Get user basic info
+    user = await db.users.find_one({"id": user_id})
+    if user:
+        profile["user_name"] = user.get("full_name")
+        profile["user_email"] = user.get("email")
+        profile["user_phone"] = user.get("phone")
+    
+    # Get portfolio count
+    portfolio_count = await db.portfolio.count_documents({"user_id": user_id})
+    profile["portfolio_count"] = portfolio_count
+    
+    # Get verification documents count
+    verified_docs_count = await db.documents.count_documents({
+        "user_id": user_id, 
+        "status": "approved"
+    })
+    profile["verified_documents"] = verified_docs_count
     
     return profile
 
@@ -279,7 +609,181 @@ async def get_client_profile(user_id: str):
 async def get_service_categories():
     return {"categories": SERVICE_CATEGORIES}
 
-# Wallet & Payment Routes
+# Professional Search & Discovery
+@api_router.get("/professionals/search")
+async def search_professionals(
+    category: Optional[str] = None,
+    location: Optional[str] = None,
+    min_rating: Optional[float] = None,
+    verified_only: bool = False,
+    limit: int = 20
+):
+    """Search for professionals"""
+    query = {}
+    
+    if category:
+        query["services"] = {"$in": [category]}
+    
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    
+    if min_rating:
+        query["rating"] = {"$gte": min_rating}
+    
+    if verified_only:
+        query["verification_status"] = "verified"
+    
+    professionals = await db.professional_profiles.find(query).limit(limit).to_list(limit)
+    
+    # Enrich with user data and portfolio
+    result = []
+    for prof in professionals:
+        if "_id" in prof:
+            prof["_id"] = str(prof["_id"])
+        
+        # Get user basic info
+        user = await db.users.find_one({"id": prof["user_id"]})
+        if user:
+            prof["user_name"] = user.get("full_name")
+            prof["user_phone"] = user.get("phone")
+        
+        # Get portfolio sample (first 3 items)
+        portfolio_sample = await db.portfolio.find(
+            {"user_id": prof["user_id"]}
+        ).limit(3).to_list(3)
+        
+        for item in portfolio_sample:
+            if "_id" in item:
+                item["_id"] = str(item["_id"])
+            # Remove image_data to reduce response size
+            if "image_data" in item:
+                item["has_image"] = True
+                del item["image_data"]
+        
+        prof["portfolio_sample"] = portfolio_sample
+        result.append(prof)
+    
+    return {"professionals": result}
+
+# Admin Routes
+@api_router.get("/admin/documents/pending")
+async def get_pending_documents(current_user: User = Depends(get_current_user)):
+    """Get all pending documents for admin review"""
+    # TODO: Add admin role check
+    
+    documents = await db.documents.find({"status": "pending"}).sort("uploaded_at", 1).to_list(100)
+    
+    # Enrich with user data
+    result = []
+    for doc in documents:
+        if "_id" in doc:
+            doc["_id"] = str(doc["_id"])
+        
+        # Get user info
+        user = await db.users.find_one({"id": doc["user_id"]})
+        if user:
+            doc["user_name"] = user.get("full_name")
+            doc["user_email"] = user.get("email")
+        
+        # Remove file_data for list view
+        if "file_data" in doc:
+            doc["has_file"] = True
+            del doc["file_data"]
+        
+        result.append(doc)
+    
+    return {"pending_documents": result}
+
+@api_router.post("/admin/documents/review")
+async def review_document(
+    review: AdminDocumentReview,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin review of a document"""
+    # TODO: Add admin role check
+    
+    try:
+        from bson import ObjectId
+        
+        # Update document status
+        await db.documents.update_one(
+            {"_id": ObjectId(review.document_id)},
+            {
+                "$set": {
+                    "status": review.status,
+                    "admin_notes": review.admin_notes,
+                    "reviewed_at": datetime.utcnow(),
+                    "reviewed_by": current_user.id
+                }
+            }
+        )
+        
+        # Get document to update professional profile
+        document = await db.documents.find_one({"_id": ObjectId(review.document_id)})
+        if document:
+            # Recalculate profile completion
+            professional = await db.professional_profiles.find_one({"user_id": document["user_id"]})
+            if professional:
+                documents = await db.documents.find({"user_id": document["user_id"]}).to_list(100)
+                portfolio_items = await db.portfolio.find({"user_id": document["user_id"]}).to_list(100)
+                
+                completion = calculate_profile_completion(professional, documents, portfolio_items)
+                
+                # Check if professional should be verified
+                required_docs = ["rg_front", "rg_back", "cpf", "address_proof", "selfie"]
+                approved_docs = [doc for doc in documents if doc.get("status") == "approved"]
+                doc_types = [doc.get("document_type") for doc in approved_docs]
+                
+                verification_status = "verified" if all(doc_type in doc_types for doc_type in required_docs) else "pending"
+                
+                await db.professional_profiles.update_one(
+                    {"user_id": document["user_id"]},
+                    {
+                        "$set": {
+                            "profile_completion": completion,
+                            "verification_status": verification_status,
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+        
+        return {"status": "success", "message": f"Document {review.status}"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(current_user: User = Depends(get_current_user)):
+    """Get platform statistics for admin dashboard"""
+    # TODO: Add admin role check
+    
+    stats = {}
+    
+    # User stats
+    stats["total_users"] = await db.users.count_documents({})
+    stats["total_clients"] = await db.users.count_documents({"user_type": "client"})
+    stats["total_professionals"] = await db.users.count_documents({"user_type": "professional"})
+    
+    # Verification stats
+    stats["verified_professionals"] = await db.professional_profiles.count_documents({"verification_status": "verified"})
+    stats["pending_documents"] = await db.documents.count_documents({"status": "pending"})
+    
+    # Booking stats
+    stats["total_bookings"] = await db.bookings.count_documents({})
+    stats["completed_bookings"] = await db.bookings.count_documents({"status": "completed"})
+    stats["active_bookings"] = await db.bookings.count_documents({"status": {"$in": ["pending", "accepted", "in_progress"]}})
+    
+    # Financial stats
+    transactions = await db.transactions.find({"status": "completed"}).to_list(10000)
+    total_volume = sum(abs(t.get("amount", 0)) for t in transactions)
+    platform_revenue = sum(abs(t.get("amount", 0)) * 0.05 for t in transactions if t.get("type") == "escrow_hold")
+    
+    stats["total_transaction_volume"] = total_volume
+    stats["platform_revenue"] = platform_revenue
+    
+    return stats
+
+# Wallet & Payment Routes (keeping existing ones)
 @api_router.get("/wallet/{user_id}")
 async def get_wallet(user_id: str, current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
@@ -523,6 +1027,68 @@ async def create_service_booking(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@api_router.get("/bookings/my")
+async def get_my_bookings(current_user: User = Depends(get_current_user)):
+    """Get bookings for current user (client or professional)"""
+    if current_user.user_type == "client":
+        query = {"client_id": current_user.id}
+    else:
+        query = {"professional_id": current_user.id}
+    
+    bookings = await db.bookings.find(query).sort("created_at", -1).to_list(100)
+    
+    # Enrich with user data
+    result = []
+    for booking in bookings:
+        if "_id" in booking:
+            booking["_id"] = str(booking["_id"])
+        
+        # Get client info
+        client = await db.users.find_one({"id": booking["client_id"]})
+        if client:
+            booking["client_name"] = client.get("full_name")
+            booking["client_phone"] = client.get("phone")
+        
+        # Get professional info  
+        professional = await db.users.find_one({"id": booking["professional_id"]})
+        if professional:
+            booking["professional_name"] = professional.get("full_name")
+            booking["professional_phone"] = professional.get("phone")
+        
+        result.append(booking)
+    
+    return {"bookings": result}
+
+@api_router.put("/booking/{booking_id}/status")
+async def update_booking_status(
+    booking_id: str,
+    status_update: BookingStatusUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update booking status"""
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Check permissions
+    if current_user.user_type == "client" and booking["client_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user.user_type == "professional" and booking["professional_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Update booking
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {
+            "$set": {
+                "status": status_update.status,
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {"status": "success", "message": f"Booking status updated to {status_update.status}"}
+
 @api_router.post("/booking/{booking_id}/complete")
 async def complete_service_booking(
     booking_id: str,
@@ -601,6 +1167,7 @@ async def complete_service_booking(
                 "$set": {
                     "status": "completed",
                     "payment_status": "released",
+                    "completed_date": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
                 }
             }
@@ -614,6 +1181,57 @@ async def complete_service_booking(
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.post("/booking/{booking_id}/review")
+async def review_booking(
+    booking_id: str,
+    review_data: BookingReview,
+    current_user: User = Depends(get_current_user)
+):
+    """Add review and rating to completed booking"""
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Only client can review
+    if booking["client_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if booking["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Can only review completed bookings")
+    
+    # Update booking with review
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {
+            "$set": {
+                "client_rating": review_data.rating,
+                "client_review": review_data.review,
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Update professional's average rating
+    all_ratings = await db.bookings.find({
+        "professional_id": booking["professional_id"],
+        "client_rating": {"$exists": True}
+    }).to_list(1000)
+    
+    if all_ratings:
+        avg_rating = sum(b["client_rating"] for b in all_ratings) / len(all_ratings)
+        await db.professional_profiles.update_one(
+            {"user_id": booking["professional_id"]},
+            {
+                "$set": {
+                    "rating": round(avg_rating, 1),
+                    "reviews_count": len(all_ratings),
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+    
+    return {"status": "success", "message": "Review submitted successfully"}
 
 # Root endpoint
 @api_router.get("/")
