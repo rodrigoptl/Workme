@@ -158,6 +158,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {user?.user_type === 'client' ? renderClientHomeContent() : renderProfessionalHomeContent()}
       </ScrollView>
+      <FloatingFeedbackButton screenName="HomeScreen" />
     </SafeAreaView>
   );
 }
