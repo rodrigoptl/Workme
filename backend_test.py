@@ -2283,6 +2283,14 @@ class WorkMeAPITester:
                 passed += 1
             print()
         
+        print("\n🧪 Running Beta Environment Tests...")
+        print("-" * 40)
+        
+        for test in beta_tests:
+            if test():
+                passed += 1
+            print()
+        
         print("\n💳 Running Payment System Tests...")
         print("-" * 40)
         
