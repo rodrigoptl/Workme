@@ -1015,11 +1015,11 @@ class WorkMeAPITester:
     
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print(f"🚀 Starting WorkMe API Tests - Authentication & Payment System")
+        print(f"🚀 Starting WorkMe API Tests - Phase 2 Comprehensive System")
         print(f"Backend URL: {self.base_url}")
         print("=" * 80)
         
-        # Authentication tests
+        # Authentication tests (prerequisite)
         auth_tests = [
             self.test_health_check,
             self.test_user_registration_client,
@@ -1032,7 +1032,41 @@ class WorkMeAPITester:
             self.test_client_profile
         ]
         
-        # Payment system tests
+        # Phase 2: Document Management System tests
+        document_tests = [
+            self.test_document_upload,
+            self.test_fetch_user_documents,
+            self.test_view_specific_document
+        ]
+        
+        # Phase 2: Portfolio Management tests
+        portfolio_tests = [
+            self.test_portfolio_upload,
+            self.test_fetch_user_portfolio
+        ]
+        
+        # Phase 2: Enhanced Professional Profile tests
+        profile_tests = [
+            self.test_professional_profile_update
+        ]
+        
+        # Phase 2: Admin System tests
+        admin_tests = [
+            self.test_admin_pending_documents,
+            self.test_admin_stats
+        ]
+        
+        # Phase 2: Professional Search & Discovery tests
+        search_tests = [
+            self.test_professional_search
+        ]
+        
+        # Phase 2: Enhanced Booking System tests
+        booking_tests = [
+            self.test_fetch_user_bookings
+        ]
+        
+        # Payment system tests (existing)
         payment_tests = [
             self.test_wallet_management,
             self.test_stripe_config,
@@ -1043,7 +1077,7 @@ class WorkMeAPITester:
             self.test_service_booking_escrow
         ]
         
-        all_tests = auth_tests + payment_tests
+        all_tests = auth_tests + document_tests + portfolio_tests + profile_tests + admin_tests + search_tests + booking_tests + payment_tests
         
         passed = 0
         total = len(all_tests)
@@ -1056,21 +1090,75 @@ class WorkMeAPITester:
                 passed += 1
             print()  # Add spacing between tests
         
+        print("\n📄 Running Document Management Tests...")
+        print("-" * 40)
+        
+        for test in document_tests:
+            if test():
+                passed += 1
+            print()
+        
+        print("\n🎨 Running Portfolio Management Tests...")
+        print("-" * 40)
+        
+        for test in portfolio_tests:
+            if test():
+                passed += 1
+            print()
+        
+        print("\n👤 Running Enhanced Professional Profile Tests...")
+        print("-" * 40)
+        
+        for test in profile_tests:
+            if test():
+                passed += 1
+            print()
+        
+        print("\n🛡️ Running Admin System Tests...")
+        print("-" * 40)
+        
+        for test in admin_tests:
+            if test():
+                passed += 1
+            print()
+        
+        print("\n🔍 Running Professional Search & Discovery Tests...")
+        print("-" * 40)
+        
+        for test in search_tests:
+            if test():
+                passed += 1
+            print()
+        
+        print("\n📅 Running Enhanced Booking System Tests...")
+        print("-" * 40)
+        
+        for test in booking_tests:
+            if test():
+                passed += 1
+            print()
+        
         print("\n💳 Running Payment System Tests...")
         print("-" * 40)
         
         for test in payment_tests:
             if test():
                 passed += 1
-            print()  # Add spacing between tests
+            print()
         
         print("=" * 80)
         print(f"📊 Test Results: {passed}/{total} tests passed")
         print(f"   - Authentication: {min(passed, len(auth_tests))}/{len(auth_tests)} tests passed")
-        print(f"   - Payment System: {max(0, passed - len(auth_tests))}/{len(payment_tests)} tests passed")
+        print(f"   - Document Management: {max(0, min(passed - len(auth_tests), len(document_tests)))}/{len(document_tests)} tests passed")
+        print(f"   - Portfolio Management: {max(0, min(passed - len(auth_tests) - len(document_tests), len(portfolio_tests)))}/{len(portfolio_tests)} tests passed")
+        print(f"   - Enhanced Profile: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests), len(profile_tests)))}/{len(profile_tests)} tests passed")
+        print(f"   - Admin System: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests), len(admin_tests)))}/{len(admin_tests)} tests passed")
+        print(f"   - Search & Discovery: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests), len(search_tests)))}/{len(search_tests)} tests passed")
+        print(f"   - Enhanced Booking: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests), len(booking_tests)))}/{len(booking_tests)} tests passed")
+        print(f"   - Payment System: {max(0, passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests) - len(booking_tests))}/{len(payment_tests)} tests passed")
         
         if passed == total:
-            print("🎉 All tests passed! WorkMe system is working correctly.")
+            print("🎉 All tests passed! WorkMe Phase 2 system is working correctly.")
         else:
             print("⚠️  Some tests failed. Check the details above.")
         
