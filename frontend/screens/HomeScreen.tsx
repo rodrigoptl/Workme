@@ -53,6 +53,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       </View>
 
       <View style={styles.quickActions}>
+        <Text style={styles.sectionTitle}>Busque com Inteligência Artificial</Text>
+        <TouchableOpacity style={styles.aiSearchButton} onPress={() => navigation.navigate('SmartSearch')}>
+          <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+          <View style={styles.aiSearchText}>
+            <Text style={styles.aiSearchTitle}>Busca Inteligente</Text>
+            <Text style={styles.aiSearchSubtitle}>Descreva o que precisa em linguagem natural</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+        
         <Text style={styles.sectionTitle}>Categorias Populares</Text>
         <View style={styles.categoryGrid}>
           {[
