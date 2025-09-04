@@ -156,11 +156,7 @@ function AppContent() {
     );
   }
 
-  return (
-    <NavigationContainer>
-      {user ? <MainStack /> : <AuthStack />}
-    </NavigationContainer>
-  );
+  return user ? <MainStack /> : <AuthStack />;
 }
 
 export default function App() {
