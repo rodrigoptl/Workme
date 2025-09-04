@@ -27,6 +27,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { trackEvent } = useBeta();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // Track screen view
@@ -36,7 +37,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const handleSearch = () => {
     if (searchQuery.trim()) {
       trackEvent('button_click', 'HomeScreen', 'search', { query: searchQuery });
-      navigation.navigate('SmartSearch', { query: searchQuery });
+      router.push('/smart-search');
     }
   };
 
@@ -49,7 +50,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       price: 'R$ 80,00'
     };
     
-    navigation.navigate('Booking', { professional: mockProfessional });
+    router.push('/booking');
   };
 
   const renderClientHomeContent = () => (
