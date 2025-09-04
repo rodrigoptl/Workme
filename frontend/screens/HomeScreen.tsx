@@ -71,7 +71,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
       <View style={styles.quickActions}>
         <Text style={styles.sectionTitle}>Busque com Inteligência Artificial</Text>
-        <TouchableOpacity style={styles.aiSearchButton} onPress={() => navigation.navigate('SmartSearch')}>
+        <TouchableOpacity style={styles.aiSearchButton} onPress={() => router.push('/smart-search')}>
           <Ionicons name="sparkles" size={24} color="#FFFFFF" />
           <View style={styles.aiSearchText}>
             <Text style={styles.aiSearchTitle}>Busca Inteligente</Text>
