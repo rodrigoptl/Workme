@@ -43,7 +43,7 @@ import base64
 from datetime import datetime, timedelta
 
 # Get backend URL from frontend .env
-BACKEND_URL = "https://service-finder-97.preview.emergentagent.com/api"
+BACKEND_URL = "https://pro-match.preview.emergentagent.com/api"
 
 class WorkMeAPITester:
     def __init__(self):

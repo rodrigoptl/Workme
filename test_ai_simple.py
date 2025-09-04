@@ -7,7 +7,7 @@ import requests
 import json
 
 # Get backend URL from frontend .env
-BACKEND_URL = "https://service-finder-97.preview.emergentagent.com/api"
+BACKEND_URL = "https://pro-match.preview.emergentagent.com/api"
 
 def test_ai_search_suggestions():
     """Test AI search suggestions endpoint (no auth required)"""
