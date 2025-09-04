@@ -186,6 +186,19 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.inputContainer}>
+              <Ionicons name="key-outline" size={20} color="#8E8E93" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Código de Acesso Beta (WORKME2025BETA)"
+                placeholderTextColor="#8E8E93"
+                value={formData.beta_access_code}
+                onChangeText={(text) => setFormData({ ...formData, beta_access_code: text })}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </View>
+
             <TouchableOpacity
               style={[styles.registerButton, (!isFormValid || loading) && styles.registerButtonDisabled]}
               onPress={handleRegister}
