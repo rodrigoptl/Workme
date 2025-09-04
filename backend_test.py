@@ -143,8 +143,14 @@ class WorkMeAPITester:
     def test_user_login(self):
         """Test user login"""
         try:
+            # Use the registered client user's email
+            if self.test_user_client:
+                email = self.test_user_client["email"]
+            else:
+                email = "maria.silva@email.com"
+                
             login_data = {
-                "email": "maria.silva@email.com",
+                "email": email,
                 "password": "SecurePass123!"
             }
             
@@ -154,6 +160,8 @@ class WorkMeAPITester:
                 data = response.json()
                 if "access_token" in data and "user" in data:
                     self.auth_token = data["access_token"]
+                    # Update test_user_client with the actual logged in user data
+                    self.test_user_client = data["user"]
                     self.log_result("User Login", True, "User login successful")
                     return True
                 else:
