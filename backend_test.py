@@ -1895,6 +1895,14 @@ class WorkMeAPITester:
                 passed += 1
             print()
         
+        print("\n🤖 Running AI Matching System Tests...")
+        print("-" * 40)
+        
+        for test in ai_tests:
+            if test():
+                passed += 1
+            print()
+        
         print("\n💳 Running Payment System Tests...")
         print("-" * 40)
         
