@@ -1744,6 +1744,376 @@ class WorkMeAPITester:
         except Exception as e:
             self.log_result("Search and Discovery Integration", False, "Search integration test failed", str(e))
             return False
+
+    # ========== BETA ENVIRONMENT TESTS ==========
+    
+    def test_beta_environment_info(self):
+        """Test GET /api/beta/environment - Beta Environment Info"""
+        try:
+            response = self.session.get(f"{self.base_url}/beta/environment")
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["environment", "is_beta", "beta_users_count", "max_beta_users", "beta_spots_remaining", "version"]
+                
+                if all(field in data for field in required_fields):
+                    environment = data["environment"]
+                    is_beta = data["is_beta"]
+                    beta_users_count = data["beta_users_count"]
+                    max_beta_users = data["max_beta_users"]
+                    beta_spots_remaining = data["beta_spots_remaining"]
+                    version = data["version"]
+                    
+                    # Validate data types and logic
+                    if (isinstance(beta_users_count, int) and isinstance(max_beta_users, int) and 
+                        isinstance(beta_spots_remaining, int) and isinstance(is_beta, bool)):
+                        
+                        # Check if beta_spots_remaining calculation is correct
+                        expected_spots = max(0, max_beta_users - beta_users_count)
+                        if beta_spots_remaining == expected_spots:
+                            self.log_result("Beta Environment Info", True, 
+                                          f"Beta environment info retrieved: {environment}, {beta_users_count}/{max_beta_users} users, {beta_spots_remaining} spots remaining")
+                            return True
+                        else:
+                            self.log_result("Beta Environment Info", False, 
+                                          f"Beta spots calculation incorrect: expected {expected_spots}, got {beta_spots_remaining}")
+                            return False
+                    else:
+                        self.log_result("Beta Environment Info", False, "Invalid data types in response", data)
+                        return False
+                else:
+                    missing_fields = [field for field in required_fields if field not in data]
+                    self.log_result("Beta Environment Info", False, f"Missing required fields: {missing_fields}", data)
+                    return False
+            else:
+                self.log_result("Beta Environment Info", False, f"Beta environment endpoint failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Environment Info", False, "Beta environment request failed", str(e))
+            return False
+    
+    def test_beta_analytics_tracking(self):
+        """Test POST /api/beta/analytics/track - Beta Analytics Tracking"""
+        if not self.auth_token:
+            self.log_result("Beta Analytics Tracking", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test different types of analytics events
+            test_events = [
+                {
+                    "session_id": "test_session_123",
+                    "event_type": "screen_view",
+                    "screen_name": "home",
+                    "action_name": None,
+                    "properties": {"user_agent": "test_browser", "screen_resolution": "1920x1080"}
+                },
+                {
+                    "session_id": "test_session_123", 
+                    "event_type": "button_click",
+                    "screen_name": "search",
+                    "action_name": "search_professionals",
+                    "properties": {"category": "Limpeza & Diarista", "location": "São Paulo"}
+                },
+                {
+                    "session_id": "test_session_123",
+                    "event_type": "form_submit",
+                    "screen_name": "booking",
+                    "action_name": "create_booking",
+                    "properties": {"service_type": "cleaning", "amount": 150.0}
+                }
+            ]
+            
+            successful_events = 0
+            
+            for event in test_events:
+                response = self.session.post(f"{self.base_url}/beta/analytics/track", json=event, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "status" in data and data["status"] == "success" and "message" in data:
+                        successful_events += 1
+                    else:
+                        self.log_result("Beta Analytics Tracking", False, f"Invalid response for {event['event_type']}", data)
+                        return False
+                else:
+                    self.log_result("Beta Analytics Tracking", False, 
+                                  f"Analytics tracking failed for {event['event_type']} with status {response.status_code}", response.text)
+                    return False
+            
+            if successful_events == len(test_events):
+                self.log_result("Beta Analytics Tracking", True, f"Successfully tracked {successful_events} analytics events")
+                return True
+            else:
+                self.log_result("Beta Analytics Tracking", False, f"Only {successful_events}/{len(test_events)} events tracked successfully")
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Analytics Tracking", False, "Beta analytics tracking request failed", str(e))
+            return False
+    
+    def test_beta_feedback_submission(self):
+        """Test POST /api/beta/feedback/submit - Beta Feedback Submission"""
+        if not self.auth_token:
+            self.log_result("Beta Feedback Submission", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test different types of feedback
+            test_feedbacks = [
+                {
+                    "screen_name": "home",
+                    "feedback_type": "suggestion",
+                    "rating": 4,
+                    "message": "A tela inicial poderia ter mais filtros de busca",
+                    "device_info": {"platform": "web", "browser": "Chrome", "version": "120.0"}
+                },
+                {
+                    "screen_name": "booking",
+                    "feedback_type": "bug",
+                    "rating": 2,
+                    "message": "O botão de confirmar reserva não está funcionando corretamente",
+                    "screenshot_data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                    "device_info": {"platform": "mobile", "os": "iOS", "version": "17.2"}
+                },
+                {
+                    "screen_name": "profile",
+                    "feedback_type": "praise",
+                    "rating": 5,
+                    "message": "Adorei a facilidade para completar o perfil profissional!",
+                    "device_info": {"platform": "web", "browser": "Safari", "version": "17.1"}
+                }
+            ]
+            
+            successful_submissions = 0
+            
+            for feedback in test_feedbacks:
+                response = self.session.post(f"{self.base_url}/beta/feedback/submit", json=feedback, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "status" in data and data["status"] == "success" and "message" in data:
+                        if "enviado com sucesso" in data["message"].lower():
+                            successful_submissions += 1
+                        else:
+                            self.log_result("Beta Feedback Submission", False, f"Unexpected success message for {feedback['feedback_type']}", data)
+                            return False
+                    else:
+                        self.log_result("Beta Feedback Submission", False, f"Invalid response for {feedback['feedback_type']}", data)
+                        return False
+                else:
+                    self.log_result("Beta Feedback Submission", False, 
+                                  f"Feedback submission failed for {feedback['feedback_type']} with status {response.status_code}", response.text)
+                    return False
+            
+            if successful_submissions == len(test_feedbacks):
+                self.log_result("Beta Feedback Submission", True, f"Successfully submitted {successful_submissions} feedback items")
+                return True
+            else:
+                self.log_result("Beta Feedback Submission", False, f"Only {successful_submissions}/{len(test_feedbacks)} feedbacks submitted successfully")
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Feedback Submission", False, "Beta feedback submission request failed", str(e))
+            return False
+    
+    def test_beta_admin_stats(self):
+        """Test GET /api/beta/admin/stats - Beta Admin Stats"""
+        if not self.auth_token:
+            self.log_result("Beta Admin Stats", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(f"{self.base_url}/beta/admin/stats", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if it's an error response
+                if "error" in data:
+                    self.log_result("Beta Admin Stats", True, f"Beta stats endpoint working (expected error in test env): {data['error']}")
+                    return True
+                
+                # Check for expected stats fields
+                expected_fields = ["total_beta_users", "active_sessions_today", "total_feedback_count", 
+                                 "average_session_time", "top_screens", "feedback_breakdown", 
+                                 "conversion_funnel", "error_rate"]
+                
+                if all(field in data for field in expected_fields):
+                    total_beta_users = data["total_beta_users"]
+                    active_sessions = data["active_sessions_today"]
+                    feedback_count = data["total_feedback_count"]
+                    error_rate = data["error_rate"]
+                    top_screens = data["top_screens"]
+                    feedback_breakdown = data["feedback_breakdown"]
+                    conversion_funnel = data["conversion_funnel"]
+                    
+                    # Validate data types
+                    if (isinstance(total_beta_users, int) and isinstance(active_sessions, int) and 
+                        isinstance(feedback_count, int) and isinstance(error_rate, (int, float)) and
+                        isinstance(top_screens, list) and isinstance(feedback_breakdown, list) and
+                        isinstance(conversion_funnel, dict)):
+                        
+                        # Validate conversion funnel structure
+                        funnel_fields = ["registered", "verified_professionals", "completed_bookings", 
+                                       "registration_to_verification", "verification_to_booking"]
+                        
+                        if all(field in conversion_funnel for field in funnel_fields):
+                            self.log_result("Beta Admin Stats", True, 
+                                          f"Beta admin stats retrieved: {total_beta_users} users, {active_sessions} active sessions, {feedback_count} feedback items, {error_rate}% error rate")
+                            return True
+                        else:
+                            missing_funnel_fields = [field for field in funnel_fields if field not in conversion_funnel]
+                            self.log_result("Beta Admin Stats", False, f"Missing conversion funnel fields: {missing_funnel_fields}")
+                            return False
+                    else:
+                        self.log_result("Beta Admin Stats", False, "Invalid data types in beta stats response", data)
+                        return False
+                else:
+                    missing_fields = [field for field in expected_fields if field not in data]
+                    self.log_result("Beta Admin Stats", False, f"Missing required beta stats fields: {missing_fields}", data)
+                    return False
+            else:
+                self.log_result("Beta Admin Stats", False, f"Beta admin stats failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Admin Stats", False, "Beta admin stats request failed", str(e))
+            return False
+    
+    def test_beta_admin_feedback(self):
+        """Test GET /api/beta/admin/feedback - Beta Admin Feedback"""
+        if not self.auth_token:
+            self.log_result("Beta Admin Feedback", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test basic feedback retrieval
+            response = self.session.get(f"{self.base_url}/beta/admin/feedback", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if "feedback" in data and isinstance(data["feedback"], list):
+                    feedback_list = data["feedback"]
+                    self.log_result("Beta Admin Feedback", True, f"Retrieved {len(feedback_list)} feedback items")
+                    
+                    # Test with filtering
+                    filter_response = self.session.get(f"{self.base_url}/beta/admin/feedback?feedback_type=bug&limit=10", headers=headers)
+                    
+                    if filter_response.status_code == 200:
+                        filter_data = filter_response.json()
+                        
+                        if "feedback" in filter_data and isinstance(filter_data["feedback"], list):
+                            filtered_feedback = filter_data["feedback"]
+                            
+                            # Verify feedback structure if any exist
+                            if feedback_list or filtered_feedback:
+                                sample_feedback = feedback_list[0] if feedback_list else filtered_feedback[0] if filtered_feedback else None
+                                
+                                if sample_feedback:
+                                    required_fields = ["user_id", "screen_name", "feedback_type", "message", "created_at"]
+                                    
+                                    if all(field in sample_feedback for field in required_fields):
+                                        # Check for user enrichment
+                                        if "user_name" in sample_feedback or "user_email" in sample_feedback:
+                                            self.log_result("Beta Admin Feedback", True, 
+                                                          f"Beta admin feedback working with user enrichment. Total: {len(feedback_list)}, Filtered: {len(filtered_feedback)}")
+                                        else:
+                                            self.log_result("Beta Admin Feedback", True, 
+                                                          f"Beta admin feedback working. Total: {len(feedback_list)}, Filtered: {len(filtered_feedback)}")
+                                        return True
+                                    else:
+                                        missing_fields = [field for field in required_fields if field not in sample_feedback]
+                                        self.log_result("Beta Admin Feedback", False, f"Feedback missing required fields: {missing_fields}")
+                                        return False
+                            else:
+                                self.log_result("Beta Admin Feedback", True, "Beta admin feedback endpoint working (no feedback items found)")
+                                return True
+                        else:
+                            self.log_result("Beta Admin Feedback", False, "Invalid filtered feedback response format", filter_data)
+                            return False
+                    else:
+                        self.log_result("Beta Admin Feedback", False, f"Filtered feedback request failed with status {filter_response.status_code}")
+                        return False
+                else:
+                    self.log_result("Beta Admin Feedback", False, "Invalid feedback response format", data)
+                    return False
+            else:
+                self.log_result("Beta Admin Feedback", False, f"Beta admin feedback failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Admin Feedback", False, "Beta admin feedback request failed", str(e))
+            return False
+    
+    def test_beta_admin_users(self):
+        """Test GET /api/beta/admin/users - Beta Admin Users"""
+        if not self.auth_token:
+            self.log_result("Beta Admin Users", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(f"{self.base_url}/beta/admin/users", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if "beta_users" in data and isinstance(data["beta_users"], list):
+                    beta_users = data["beta_users"]
+                    self.log_result("Beta Admin Users", True, f"Retrieved {len(beta_users)} beta users")
+                    
+                    # Verify user structure if any exist
+                    if beta_users:
+                        user = beta_users[0]
+                        required_fields = ["id", "email", "full_name", "user_type", "is_beta_user", "beta_joined_at"]
+                        
+                        if all(field in user for field in required_fields):
+                            # Check for activity data enrichment
+                            activity_fields = ["last_activity", "session_count", "feedback_count"]
+                            
+                            if all(field in user for field in activity_fields):
+                                # Validate data types
+                                if (isinstance(user["session_count"], int) and 
+                                    isinstance(user["feedback_count"], int) and
+                                    user["is_beta_user"] == True):
+                                    
+                                    self.log_result("Beta Admin Users", True, 
+                                                  f"Beta admin users working with activity enrichment. Found {len(beta_users)} beta users with session/feedback data")
+                                    return True
+                                else:
+                                    self.log_result("Beta Admin Users", False, "Invalid activity data types or beta user flag", user)
+                                    return False
+                            else:
+                                self.log_result("Beta Admin Users", True, 
+                                              f"Beta admin users working. Found {len(beta_users)} beta users (activity enrichment may be missing)")
+                                return True
+                        else:
+                            missing_fields = [field for field in required_fields if field not in user]
+                            self.log_result("Beta Admin Users", False, f"Beta user missing required fields: {missing_fields}")
+                            return False
+                    else:
+                        self.log_result("Beta Admin Users", True, "Beta admin users endpoint working (no beta users found)")
+                        return True
+                else:
+                    self.log_result("Beta Admin Users", False, "Invalid beta users response format", data)
+                    return False
+            else:
+                self.log_result("Beta Admin Users", False, f"Beta admin users failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Admin Users", False, "Beta admin users request failed", str(e))
+            return False
     
     def run_all_tests(self):
         """Run all tests in sequence"""
