@@ -161,9 +161,11 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <StatusBar style="light" />
-      <AppContent />
-      <FlashMessage position="top" />
+      <BetaProvider>
+        <StatusBar style="light" />
+        <AppContent />
+        <FlashMessage position="top" />
+      </BetaProvider>
     </AuthProvider>
   );
 }
