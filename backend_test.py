@@ -2214,7 +2214,7 @@ class WorkMeAPITester:
             self.test_search_and_discovery_integration
         ]
         
-        all_tests = auth_tests + document_tests + portfolio_tests + profile_tests + admin_tests + search_tests + booking_tests + ai_tests + payment_tests
+        all_tests = auth_tests + document_tests + portfolio_tests + profile_tests + admin_tests + search_tests + booking_tests + ai_tests + beta_tests + payment_tests
         
         passed = 0
         total = len(all_tests)
