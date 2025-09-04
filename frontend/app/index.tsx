@@ -9,6 +9,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ServicesScreen from '../screens/ServicesScreen';
+import WalletScreen from '../screens/WalletScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import FlashMessage from 'react-native-flash-message';
@@ -38,6 +39,8 @@ function MainTabs() {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Services') {
             iconName = focused ? 'grid' : 'grid-outline';
+          } else if (route.name === 'Wallet') {
+            iconName = focused ? 'wallet' : 'wallet-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           } else {
@@ -70,6 +73,11 @@ function MainTabs() {
         name="Services" 
         component={ServicesScreen} 
         options={{ title: 'Categorias' }}
+      />
+      <Tab.Screen 
+        name="Wallet" 
+        component={WalletScreen} 
+        options={{ title: 'Carteira' }}
       />
       <Tab.Screen 
         name="Profile" 
