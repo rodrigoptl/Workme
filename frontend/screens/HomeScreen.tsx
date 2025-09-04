@@ -291,4 +291,22 @@ const styles = StyleSheet.create({
     color: '#6D6D70',
     textAlign: 'center',
   },
+  demoSection: {
+    marginBottom: 32,
+  },
+  demoButton: {
+    backgroundColor: '#FF9500',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  demoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
