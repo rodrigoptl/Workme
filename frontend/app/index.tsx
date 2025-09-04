@@ -10,6 +10,7 @@ import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ServicesScreen from '../screens/ServicesScreen';
 import WalletScreen from '../screens/WalletScreen';
+import BookingScreen from '../screens/BookingScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import FlashMessage from 'react-native-flash-message';
