@@ -58,11 +58,11 @@ def test_unauthenticated_scenarios():
         }
         response = requests.post(f"{BACKEND_URL}/beta/analytics/track", json=event)
         
-        if response.status_code == 401:
-            print(f"   ✅ SUCCESS: Correctly rejected (401 Unauthorized)")
+        if response.status_code == 403:
+            print(f"   ✅ SUCCESS: Correctly rejected (403 Forbidden)")
             results.append(True)
         else:
-            print(f"   ❌ FAILED: Expected 401, got {response.status_code}")
+            print(f"   ❌ FAILED: Expected 403, got {response.status_code}")
             results.append(False)
     except Exception as e:
         print(f"   ❌ ERROR: {str(e)}")
@@ -78,11 +78,11 @@ def test_unauthenticated_scenarios():
         }
         response = requests.post(f"{BACKEND_URL}/beta/feedback/submit", json=feedback)
         
-        if response.status_code == 401:
-            print(f"   ✅ SUCCESS: Correctly rejected (401 Unauthorized)")
+        if response.status_code == 403:
+            print(f"   ✅ SUCCESS: Correctly rejected (403 Forbidden)")
             results.append(True)
         else:
-            print(f"   ❌ FAILED: Expected 401, got {response.status_code}")
+            print(f"   ❌ FAILED: Expected 403, got {response.status_code}")
             results.append(False)
     except Exception as e:
         print(f"   ❌ ERROR: {str(e)}")
@@ -93,11 +93,11 @@ def test_unauthenticated_scenarios():
         print("5. Testing Admin Stats (unauthenticated - should fail)...")
         response = requests.get(f"{BACKEND_URL}/beta/admin/stats")
         
-        if response.status_code == 401:
-            print(f"   ✅ SUCCESS: Correctly rejected (401 Unauthorized)")
+        if response.status_code == 403:
+            print(f"   ✅ SUCCESS: Correctly rejected (403 Forbidden)")
             results.append(True)
         else:
-            print(f"   ❌ FAILED: Expected 401, got {response.status_code}")
+            print(f"   ❌ FAILED: Expected 403, got {response.status_code}")
             results.append(False)
     except Exception as e:
         print(f"   ❌ ERROR: {str(e)}")
