@@ -109,6 +109,26 @@ function MainStack() {
           presentation: 'modal'
         }}
       />
+      <Stack.Screen 
+        name="Documents" 
+        component={DocumentsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Portfolio" 
+        component={PortfolioScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ProfessionalProfile" 
+        component={ProfessionalProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Admin" 
+        component={AdminScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }
