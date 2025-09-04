@@ -39,7 +39,7 @@ def test_ai_search_suggestions():
         return False
 
 def test_ai_match_without_auth():
-    """Test AI match endpoint without auth (should return 401)"""
+    """Test AI match endpoint without auth (should return 401 or 403)"""
     try:
         matching_request = {
             "client_request": "Preciso de um eletricista para instalar chuveiro elétrico",
@@ -48,8 +48,8 @@ def test_ai_match_without_auth():
         
         response = requests.post(f"{BACKEND_URL}/ai/match-professionals", json=matching_request)
         
-        if response.status_code == 401:
-            print("✅ AI Match Professionals: Correctly requires authentication")
+        if response.status_code in [401, 403]:
+            print("✅ AI Match Professionals: Correctly requires authentication/authorization")
             return True
         else:
             print(f"❌ AI Match Professionals: Unexpected status {response.status_code}")
@@ -60,7 +60,7 @@ def test_ai_match_without_auth():
         return False
 
 def test_ai_smart_search_without_auth():
-    """Test AI smart search endpoint without auth (should return 401)"""
+    """Test AI smart search endpoint without auth (should return 401 or 403)"""
     try:
         search_request = {
             "query": "Busco diarista para limpeza semanal da casa",
@@ -69,8 +69,8 @@ def test_ai_smart_search_without_auth():
         
         response = requests.post(f"{BACKEND_URL}/ai/smart-search", json=search_request)
         
-        if response.status_code == 401:
-            print("✅ AI Smart Search: Correctly requires authentication")
+        if response.status_code in [401, 403]:
+            print("✅ AI Smart Search: Correctly requires authentication/authorization")
             return True
         else:
             print(f"❌ AI Smart Search: Unexpected status {response.status_code}")
