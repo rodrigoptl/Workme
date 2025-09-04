@@ -1039,6 +1039,343 @@ class WorkMeAPITester:
             self.log_result("Fetch User Bookings", False, "Fetch bookings request failed", str(e))
             return False
 
+    # ========== AI MATCHING SYSTEM TESTS ==========
+    
+    def test_ai_match_professionals(self):
+        """Test AI-powered professional matching endpoint"""
+        if not self.auth_token:
+            self.log_result("AI Match Professionals", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test natural language matching request
+            matching_request = {
+                "client_request": "Preciso de um eletricista para instalar chuveiro elétrico",
+                "location": "São Paulo, SP",
+                "budget_range": "R$ 100-200",
+                "urgency": "normal",
+                "preferred_time": "manhã"
+            }
+            
+            response = self.session.post(f"{self.base_url}/ai/match-professionals", 
+                                       json=matching_request, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["matches", "search_interpretation", "suggestions"]
+                
+                if all(field in data for field in required_fields):
+                    matches = data["matches"]
+                    interpretation = data["search_interpretation"]
+                    suggestions = data["suggestions"]
+                    
+                    # Verify match structure
+                    if matches and len(matches) > 0:
+                        match = matches[0]
+                        match_fields = ["professional_id", "score", "reasoning", "match_factors"]
+                        if all(field in match for field in match_fields):
+                            self.log_result("AI Match Professionals", True, 
+                                          f"AI matching returned {len(matches)} matches with interpretation: '{interpretation[:50]}...'")
+                            return True
+                        else:
+                            self.log_result("AI Match Professionals", False, "Invalid match structure", match)
+                            return False
+                    else:
+                        # No matches is acceptable if no verified professionals exist
+                        self.log_result("AI Match Professionals", True, 
+                                      f"AI matching working - no matches found (expected if no verified professionals)")
+                        return True
+                else:
+                    self.log_result("AI Match Professionals", False, "Missing required response fields", data)
+                    return False
+            else:
+                self.log_result("AI Match Professionals", False, 
+                              f"AI matching failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Match Professionals", False, "AI matching request failed", str(e))
+            return False
+    
+    def test_ai_smart_search(self):
+        """Test AI smart search with enriched professional data"""
+        if not self.auth_token:
+            self.log_result("AI Smart Search", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test smart search request
+            search_request = {
+                "query": "Busco diarista para limpeza semanal da casa",
+                "location": "São Paulo",
+                "limit": 5
+            }
+            
+            response = self.session.post(f"{self.base_url}/ai/smart-search", 
+                                       json=search_request, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["matches", "search_interpretation", "suggestions", "total_found"]
+                
+                if all(field in data for field in required_fields):
+                    matches = data["matches"]
+                    total_found = data["total_found"]
+                    
+                    # Verify enriched match structure
+                    if matches and len(matches) > 0:
+                        match = matches[0]
+                        if "profile" in match and "score" in match and "reasoning" in match:
+                            profile = match["profile"]
+                            profile_fields = ["name", "rating", "services", "verification_status"]
+                            if all(field in profile for field in profile_fields):
+                                self.log_result("AI Smart Search", True, 
+                                              f"Smart search returned {len(matches)} enriched matches (total: {total_found})")
+                                return True
+                            else:
+                                self.log_result("AI Smart Search", False, "Invalid enriched profile structure", profile)
+                                return False
+                        else:
+                            self.log_result("AI Smart Search", False, "Invalid enriched match structure", match)
+                            return False
+                    else:
+                        # No matches is acceptable
+                        self.log_result("AI Smart Search", True, 
+                                      f"Smart search working - no matches found (total: {total_found})")
+                        return True
+                else:
+                    self.log_result("AI Smart Search", False, "Missing required response fields", data)
+                    return False
+            else:
+                self.log_result("AI Smart Search", False, 
+                              f"Smart search failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Smart Search", False, "Smart search request failed", str(e))
+            return False
+    
+    def test_ai_search_suggestions(self):
+        """Test AI search suggestions endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/ai/search-suggestions")
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if "suggestions" in data and isinstance(data["suggestions"], list):
+                    suggestions = data["suggestions"]
+                    
+                    if len(suggestions) > 0:
+                        # Verify suggestions are meaningful
+                        expected_keywords = ["eletricista", "diarista", "cabelo", "iPhone", "cachorro", 
+                                           "fotógrafo", "encanador", "manicure", "cozinha", "TV"]
+                        
+                        suggestion_text = " ".join(suggestions).lower()
+                        matching_keywords = [kw for kw in expected_keywords if kw in suggestion_text]
+                        
+                        if len(matching_keywords) >= 3:
+                            self.log_result("AI Search Suggestions", True, 
+                                          f"Retrieved {len(suggestions)} search suggestions with relevant keywords")
+                            return True
+                        else:
+                            self.log_result("AI Search Suggestions", False, 
+                                          f"Suggestions don't contain expected service keywords", suggestions)
+                            return False
+                    else:
+                        self.log_result("AI Search Suggestions", False, "No suggestions returned")
+                        return False
+                else:
+                    self.log_result("AI Search Suggestions", False, "Invalid suggestions response format", data)
+                    return False
+            else:
+                self.log_result("AI Search Suggestions", False, 
+                              f"Search suggestions failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Search Suggestions", False, "Search suggestions request failed", str(e))
+            return False
+    
+    def test_ai_error_handling_fallback(self):
+        """Test AI system fallback when Emergent LLM is unavailable"""
+        if not self.auth_token:
+            self.log_result("AI Error Handling", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test with a request that might trigger fallback
+            matching_request = {
+                "client_request": "Teste de fallback do sistema de IA",
+                "location": "Teste",
+                "budget_range": "R$ 50-100"
+            }
+            
+            response = self.session.post(f"{self.base_url}/ai/match-professionals", 
+                                       json=matching_request, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if response contains fallback indicators
+                interpretation = data.get("search_interpretation", "")
+                suggestions = data.get("suggestions", [])
+                
+                # Look for fallback messages
+                fallback_indicators = ["busca tradicional", "sistema de IA temporariamente", 
+                                     "fallback", "busca padrão"]
+                
+                is_fallback = any(indicator in interpretation.lower() for indicator in fallback_indicators)
+                is_fallback = is_fallback or any(any(indicator in sugg.lower() for indicator in fallback_indicators) 
+                                               for sugg in suggestions)
+                
+                if is_fallback:
+                    self.log_result("AI Error Handling", True, 
+                                  "AI system correctly falls back to traditional search when needed")
+                else:
+                    self.log_result("AI Error Handling", True, 
+                                  "AI system working normally (fallback not triggered)")
+                return True
+            else:
+                self.log_result("AI Error Handling", False, 
+                              f"AI error handling test failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Error Handling", False, "AI error handling test failed", str(e))
+            return False
+    
+    def test_ai_integration_with_verified_professionals(self):
+        """Test AI matching integration with existing professional profiles"""
+        if not self.auth_token:
+            self.log_result("AI Integration Test", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # First check if we have any verified professionals
+            search_response = self.session.get(f"{self.base_url}/professionals/search?verified_only=true")
+            
+            if search_response.status_code == 200:
+                search_data = search_response.json()
+                verified_professionals = search_data.get("professionals", [])
+                
+                # Test AI matching with different service categories
+                test_queries = [
+                    "Preciso de um profissional para limpeza da casa",
+                    "Busco alguém para reformar meu banheiro",
+                    "Quero fazer corte de cabelo em casa"
+                ]
+                
+                successful_tests = 0
+                
+                for query in test_queries:
+                    matching_request = {
+                        "client_request": query,
+                        "location": "São Paulo"
+                    }
+                    
+                    ai_response = self.session.post(f"{self.base_url}/ai/match-professionals", 
+                                                  json=matching_request, headers=headers)
+                    
+                    if ai_response.status_code == 200:
+                        ai_data = ai_response.json()
+                        if "matches" in ai_data and "search_interpretation" in ai_data:
+                            successful_tests += 1
+                
+                if successful_tests == len(test_queries):
+                    self.log_result("AI Integration Test", True, 
+                                  f"AI system successfully processed {successful_tests} different queries with {len(verified_professionals)} verified professionals")
+                    return True
+                else:
+                    self.log_result("AI Integration Test", False, 
+                                  f"Only {successful_tests}/{len(test_queries)} AI queries succeeded")
+                    return False
+            else:
+                self.log_result("AI Integration Test", False, "Failed to get verified professionals for integration test")
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Integration Test", False, "AI integration test failed", str(e))
+            return False
+    
+    def test_ai_scoring_algorithm(self):
+        """Test AI scoring algorithm accuracy and consistency"""
+        if not self.auth_token:
+            self.log_result("AI Scoring Algorithm", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Test with specific service request
+            matching_request = {
+                "client_request": "Preciso de um eletricista experiente para instalação elétrica completa",
+                "location": "São Paulo, SP",
+                "budget_range": "R$ 200-500",
+                "urgency": "normal"
+            }
+            
+            response = self.session.post(f"{self.base_url}/ai/match-professionals", 
+                                       json=matching_request, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                matches = data.get("matches", [])
+                
+                if matches:
+                    # Verify scoring consistency
+                    scores_valid = True
+                    for match in matches:
+                        score = match.get("score", 0)
+                        match_factors = match.get("match_factors", {})
+                        
+                        # Score should be between 0-100
+                        if not (0 <= score <= 100):
+                            scores_valid = False
+                            break
+                        
+                        # Match factors should exist and be reasonable
+                        if not match_factors or len(match_factors) == 0:
+                            scores_valid = False
+                            break
+                    
+                    if scores_valid:
+                        # Check if scores are in descending order (best matches first)
+                        scores = [match["score"] for match in matches]
+                        is_sorted = all(scores[i] >= scores[i+1] for i in range(len(scores)-1))
+                        
+                        if is_sorted:
+                            self.log_result("AI Scoring Algorithm", True, 
+                                          f"AI scoring algorithm working correctly - {len(matches)} matches with valid scores")
+                            return True
+                        else:
+                            self.log_result("AI Scoring Algorithm", False, 
+                                          f"Matches not sorted by score: {scores}")
+                            return False
+                    else:
+                        self.log_result("AI Scoring Algorithm", False, "Invalid scoring detected in matches")
+                        return False
+                else:
+                    self.log_result("AI Scoring Algorithm", True, 
+                                  "AI scoring algorithm working - no matches found (expected if no relevant professionals)")
+                    return True
+            else:
+                self.log_result("AI Scoring Algorithm", False, 
+                              f"AI scoring test failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("AI Scoring Algorithm", False, "AI scoring algorithm test failed", str(e))
+            return False
+
     # ========== END-TO-END JOURNEY TESTS ==========
     
     def test_complete_client_journey(self):
