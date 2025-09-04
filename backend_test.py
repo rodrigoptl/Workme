@@ -2341,8 +2341,13 @@ class WorkMeAPITester:
         ai_passed = max(0, min(passed - ai_start, len(ai_tests)))
         print(f"   - AI Matching System: {ai_passed}/{len(ai_tests)} tests passed")
         
+        # Calculate beta tests passed
+        beta_start = ai_start + len(ai_tests)
+        beta_passed = max(0, min(passed - beta_start, len(beta_tests)))
+        print(f"   - Beta Environment: {beta_passed}/{len(beta_tests)} tests passed")
+        
         # Calculate payment tests passed
-        payment_start = ai_start + len(ai_tests)
+        payment_start = beta_start + len(beta_tests)
         payment_passed = max(0, passed - payment_start)
         print(f"   - Payment System: {payment_passed}/{len(payment_tests)} tests passed")
         
