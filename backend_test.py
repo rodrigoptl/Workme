@@ -557,6 +557,461 @@ class WorkMeAPITester:
         except Exception as e:
             self.log_result("Service Booking Escrow", False, "Service booking request failed", str(e))
             return False
+
+    # ========== PHASE 2: DOCUMENT MANAGEMENT TESTS ==========
+    
+    def test_document_upload(self):
+        """Test document upload for all types"""
+        if not self.auth_token:
+            self.log_result("Document Upload", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            
+            # Create sample base64 image data (small PNG)
+            sample_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+            
+            # Test uploading different document types
+            document_types = ["rg_front", "rg_back", "cpf", "address_proof", "selfie", "certificate"]
+            
+            for doc_type in document_types:
+                document_data = {
+                    "document_type": doc_type,
+                    "file_data": sample_image,
+                    "file_name": f"{doc_type}_test.png",
+                    "description": f"Test {doc_type} document"
+                }
+                
+                response = self.session.post(f"{self.base_url}/documents/upload", json=document_data, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "status" in data and data["status"] == "success":
+                        continue
+                    else:
+                        self.log_result("Document Upload", False, f"Invalid response for {doc_type}", data)
+                        return False
+                else:
+                    self.log_result("Document Upload", False, f"Upload failed for {doc_type} with status {response.status_code}", response.text)
+                    return False
+            
+            self.log_result("Document Upload", True, f"Successfully uploaded {len(document_types)} document types")
+            return True
+                
+        except Exception as e:
+            self.log_result("Document Upload", False, "Document upload request failed", str(e))
+            return False
+    
+    def test_fetch_user_documents(self):
+        """Test fetching user documents"""
+        if not self.auth_token or not self.test_user_client:
+            self.log_result("Fetch User Documents", False, "No authenticated user available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            user_id = self.test_user_client["id"]
+            response = self.session.get(f"{self.base_url}/documents/{user_id}", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "documents" in data and isinstance(data["documents"], list):
+                    documents = data["documents"]
+                    self.log_result("Fetch User Documents", True, f"Retrieved {len(documents)} documents")
+                    
+                    # Verify document structure
+                    if documents:
+                        doc = documents[0]
+                        required_fields = ["id", "user_id", "document_type", "status", "uploaded_at"]
+                        if all(field in doc for field in required_fields):
+                            self.log_result("Fetch User Documents", True, "Document structure is correct")
+                        else:
+                            self.log_result("Fetch User Documents", False, "Document missing required fields", doc)
+                            return False
+                    
+                    return True
+                else:
+                    self.log_result("Fetch User Documents", False, "Invalid documents response format", data)
+                    return False
+            else:
+                self.log_result("Fetch User Documents", False, f"Fetch documents failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Fetch User Documents", False, "Fetch documents request failed", str(e))
+            return False
+    
+    def test_view_specific_document(self):
+        """Test viewing specific documents with full data"""
+        if not self.auth_token or not self.test_user_client:
+            self.log_result("View Specific Document", False, "No authenticated user available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            user_id = self.test_user_client["id"]
+            
+            # First get user documents to find a document ID
+            response = self.session.get(f"{self.base_url}/documents/{user_id}", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                documents = data.get("documents", [])
+                
+                if documents:
+                    # Try to view the first document
+                    doc_id = documents[0].get("_id") or documents[0].get("id")
+                    if doc_id:
+                        view_response = self.session.get(f"{self.base_url}/documents/view/{doc_id}", headers=headers)
+                        
+                        if view_response.status_code == 200:
+                            doc_data = view_response.json()
+                            if "file_data" in doc_data and "document_type" in doc_data:
+                                self.log_result("View Specific Document", True, "Document viewed with full data successfully")
+                                return True
+                            else:
+                                self.log_result("View Specific Document", False, "Document view missing file data", doc_data)
+                                return False
+                        else:
+                            self.log_result("View Specific Document", False, f"Document view failed with status {view_response.status_code}", view_response.text)
+                            return False
+                    else:
+                        self.log_result("View Specific Document", False, "No document ID found")
+                        return False
+                else:
+                    self.log_result("View Specific Document", True, "No documents to view (expected for new user)")
+                    return True
+            else:
+                self.log_result("View Specific Document", False, f"Failed to get documents list with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("View Specific Document", False, "View document request failed", str(e))
+            return False
+
+    # ========== PHASE 2: PORTFOLIO MANAGEMENT TESTS ==========
+    
+    def test_portfolio_upload(self):
+        """Test portfolio upload with image data and metadata"""
+        if not self.auth_token or not self.test_user_professional:
+            self.log_result("Portfolio Upload", False, "No authenticated professional user available")
+            return False
+            
+        try:
+            # First login as professional
+            professional_login = {
+                "email": self.test_user_professional["email"],
+                "password": "SecurePass456!"
+            }
+            
+            login_response = self.session.post(f"{self.base_url}/auth/login", json=professional_login)
+            
+            if login_response.status_code == 200:
+                login_data = login_response.json()
+                prof_token = login_data["access_token"]
+                headers = {"Authorization": f"Bearer {prof_token}"}
+                
+                # Create sample portfolio item
+                sample_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                
+                portfolio_data = {
+                    "title": "Reforma de Banheiro Completa",
+                    "description": "Reforma completa de banheiro incluindo azulejos, louças e acabamentos",
+                    "image_data": sample_image,
+                    "category": "Casa & Construção",
+                    "work_date": "2024-01-15",
+                    "client_feedback": "Excelente trabalho, muito profissional!"
+                }
+                
+                response = self.session.post(f"{self.base_url}/portfolio/upload", json=portfolio_data, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "status" in data and data["status"] == "success" and "portfolio_id" in data:
+                        self.log_result("Portfolio Upload", True, "Portfolio item uploaded successfully")
+                        return True
+                    else:
+                        self.log_result("Portfolio Upload", False, "Invalid portfolio upload response", data)
+                        return False
+                else:
+                    self.log_result("Portfolio Upload", False, f"Portfolio upload failed with status {response.status_code}", response.text)
+                    return False
+            else:
+                self.log_result("Portfolio Upload", False, "Failed to login as professional")
+                return False
+                
+        except Exception as e:
+            self.log_result("Portfolio Upload", False, "Portfolio upload request failed", str(e))
+            return False
+    
+    def test_fetch_user_portfolio(self):
+        """Test fetching user portfolio items"""
+        if not self.test_user_professional:
+            self.log_result("Fetch User Portfolio", False, "No professional user available")
+            return False
+            
+        try:
+            user_id = self.test_user_professional["id"]
+            response = self.session.get(f"{self.base_url}/portfolio/{user_id}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "portfolio" in data and isinstance(data["portfolio"], list):
+                    portfolio = data["portfolio"]
+                    self.log_result("Fetch User Portfolio", True, f"Retrieved {len(portfolio)} portfolio items")
+                    
+                    # Verify portfolio structure if any exist
+                    if portfolio:
+                        item = portfolio[0]
+                        required_fields = ["id", "user_id", "title", "description", "category", "created_at"]
+                        if all(field in item for field in required_fields):
+                            self.log_result("Fetch User Portfolio", True, "Portfolio structure is correct")
+                        else:
+                            self.log_result("Fetch User Portfolio", False, "Portfolio item missing required fields", item)
+                            return False
+                    
+                    return True
+                else:
+                    self.log_result("Fetch User Portfolio", False, "Invalid portfolio response format", data)
+                    return False
+            else:
+                self.log_result("Fetch User Portfolio", False, f"Fetch portfolio failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Fetch User Portfolio", False, "Fetch portfolio request failed", str(e))
+            return False
+
+    # ========== PHASE 2: ENHANCED PROFESSIONAL PROFILE TESTS ==========
+    
+    def test_professional_profile_update(self):
+        """Test professional profile updates with all new fields"""
+        if not self.auth_token or not self.test_user_professional:
+            self.log_result("Professional Profile Update", False, "No authenticated professional user available")
+            return False
+            
+        try:
+            # Login as professional
+            professional_login = {
+                "email": self.test_user_professional["email"],
+                "password": "SecurePass456!"
+            }
+            
+            login_response = self.session.post(f"{self.base_url}/auth/login", json=professional_login)
+            
+            if login_response.status_code == 200:
+                login_data = login_response.json()
+                prof_token = login_data["access_token"]
+                headers = {"Authorization": f"Bearer {prof_token}"}
+                
+                # Update professional profile with comprehensive data
+                profile_update = {
+                    "bio": "Profissional experiente em reformas e construção com mais de 10 anos de experiência",
+                    "services": ["Casa & Construção", "Limpeza & Diarista"],
+                    "specialties": ["Reformas", "Pintura", "Elétrica", "Hidráulica"],
+                    "experience_years": 10,
+                    "hourly_rate": 75.0,
+                    "service_radius_km": 25,
+                    "availability_hours": {
+                        "monday": "8-18",
+                        "tuesday": "8-18",
+                        "wednesday": "8-18",
+                        "thursday": "8-18",
+                        "friday": "8-17",
+                        "saturday": "9-15"
+                    },
+                    "location": "São Paulo, SP",
+                    "certifications": ["CREA", "NR-35", "Curso de Elétrica Residencial"],
+                    "languages": ["Português", "Inglês"]
+                }
+                
+                response = self.session.put(f"{self.base_url}/profile/professional", json=profile_update, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "status" in data and data["status"] == "success" and "profile_completion" in data:
+                        completion = data["profile_completion"]
+                        self.log_result("Professional Profile Update", True, f"Profile updated successfully with {completion}% completion")
+                        return True
+                    else:
+                        self.log_result("Professional Profile Update", False, "Invalid profile update response", data)
+                        return False
+                else:
+                    self.log_result("Professional Profile Update", False, f"Profile update failed with status {response.status_code}", response.text)
+                    return False
+            else:
+                self.log_result("Professional Profile Update", False, "Failed to login as professional")
+                return False
+                
+        except Exception as e:
+            self.log_result("Professional Profile Update", False, "Profile update request failed", str(e))
+            return False
+
+    # ========== PHASE 2: ADMIN SYSTEM TESTS ==========
+    
+    def test_admin_pending_documents(self):
+        """Test fetching pending documents for admin review"""
+        if not self.auth_token:
+            self.log_result("Admin Pending Documents", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(f"{self.base_url}/admin/documents/pending", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "pending_documents" in data and isinstance(data["pending_documents"], list):
+                    pending_docs = data["pending_documents"]
+                    self.log_result("Admin Pending Documents", True, f"Retrieved {len(pending_docs)} pending documents")
+                    
+                    # Verify document structure if any exist
+                    if pending_docs:
+                        doc = pending_docs[0]
+                        required_fields = ["_id", "user_id", "document_type", "status", "uploaded_at"]
+                        if all(field in doc for field in required_fields):
+                            self.log_result("Admin Pending Documents", True, "Pending document structure is correct")
+                        else:
+                            self.log_result("Admin Pending Documents", False, "Pending document missing required fields", doc)
+                            return False
+                    
+                    return True
+                else:
+                    self.log_result("Admin Pending Documents", False, "Invalid pending documents response format", data)
+                    return False
+            else:
+                self.log_result("Admin Pending Documents", False, f"Admin pending documents failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Admin Pending Documents", False, "Admin pending documents request failed", str(e))
+            return False
+    
+    def test_admin_stats(self):
+        """Test admin statistics endpoint"""
+        if not self.auth_token:
+            self.log_result("Admin Stats", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(f"{self.base_url}/admin/stats", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                expected_stats = ["total_users", "total_clients", "total_professionals", "verified_professionals", 
+                                "pending_documents", "total_bookings", "completed_bookings", "active_bookings",
+                                "total_transaction_volume", "platform_revenue"]
+                
+                if all(stat in data for stat in expected_stats):
+                    self.log_result("Admin Stats", True, f"Admin stats retrieved with {len(data)} metrics")
+                    return True
+                else:
+                    missing_stats = [stat for stat in expected_stats if stat not in data]
+                    self.log_result("Admin Stats", False, f"Missing stats: {missing_stats}", data)
+                    return False
+            else:
+                self.log_result("Admin Stats", False, f"Admin stats failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Admin Stats", False, "Admin stats request failed", str(e))
+            return False
+
+    # ========== PHASE 2: PROFESSIONAL SEARCH & DISCOVERY TESTS ==========
+    
+    def test_professional_search(self):
+        """Test professional search with various filters"""
+        try:
+            # Test basic search without filters
+            response = self.session.get(f"{self.base_url}/professionals/search")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "professionals" in data and isinstance(data["professionals"], list):
+                    professionals = data["professionals"]
+                    self.log_result("Professional Search", True, f"Basic search returned {len(professionals)} professionals")
+                    
+                    # Test search with category filter
+                    category_response = self.session.get(f"{self.base_url}/professionals/search?category=Casa & Construção")
+                    
+                    if category_response.status_code == 200:
+                        category_data = category_response.json()
+                        if "professionals" in category_data:
+                            self.log_result("Professional Search", True, f"Category search returned {len(category_data['professionals'])} professionals")
+                        else:
+                            self.log_result("Professional Search", False, "Invalid category search response", category_data)
+                            return False
+                    else:
+                        self.log_result("Professional Search", False, f"Category search failed with status {category_response.status_code}")
+                        return False
+                    
+                    # Test search with location filter
+                    location_response = self.session.get(f"{self.base_url}/professionals/search?location=São Paulo")
+                    
+                    if location_response.status_code == 200:
+                        location_data = location_response.json()
+                        if "professionals" in location_data:
+                            self.log_result("Professional Search", True, f"Location search returned {len(location_data['professionals'])} professionals")
+                        else:
+                            self.log_result("Professional Search", False, "Invalid location search response", location_data)
+                            return False
+                    else:
+                        self.log_result("Professional Search", False, f"Location search failed with status {location_response.status_code}")
+                        return False
+                    
+                    return True
+                else:
+                    self.log_result("Professional Search", False, "Invalid search response format", data)
+                    return False
+            else:
+                self.log_result("Professional Search", False, f"Professional search failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Professional Search", False, "Professional search request failed", str(e))
+            return False
+
+    # ========== PHASE 2: ENHANCED BOOKING SYSTEM TESTS ==========
+    
+    def test_fetch_user_bookings(self):
+        """Test fetching user bookings with enriched data"""
+        if not self.auth_token:
+            self.log_result("Fetch User Bookings", False, "No auth token available")
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            response = self.session.get(f"{self.base_url}/bookings/my", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "bookings" in data and isinstance(data["bookings"], list):
+                    bookings = data["bookings"]
+                    self.log_result("Fetch User Bookings", True, f"Retrieved {len(bookings)} bookings")
+                    
+                    # Verify booking structure if any exist
+                    if bookings:
+                        booking = bookings[0]
+                        required_fields = ["id", "client_id", "professional_id", "service_category", "amount", "status"]
+                        if all(field in booking for field in required_fields):
+                            self.log_result("Fetch User Bookings", True, "Booking structure is correct")
+                        else:
+                            self.log_result("Fetch User Bookings", False, "Booking missing required fields", booking)
+                            return False
+                    
+                    return True
+                else:
+                    self.log_result("Fetch User Bookings", False, "Invalid bookings response format", data)
+                    return False
+            else:
+                self.log_result("Fetch User Bookings", False, f"Fetch bookings failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Fetch User Bookings", False, "Fetch bookings request failed", str(e))
+            return False
     
     def run_all_tests(self):
         """Run all tests in sequence"""
