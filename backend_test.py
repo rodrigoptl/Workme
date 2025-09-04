@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for WorkMe Authentication System
-Tests all authentication endpoints and core functionality
+Backend API Testing for WorkMe Phase 2 System
+Tests comprehensive WorkMe system including:
+- Document Management System
+- Portfolio Management  
+- Enhanced Professional Profile
+- Admin System
+- Professional Search & Discovery
+- Enhanced Booking System
 """
 
 import requests
 import json
 import sys
-from datetime import datetime
+import base64
+from datetime import datetime, timedelta
 
 # Get backend URL from frontend .env
 BACKEND_URL = "https://service-finder-97.preview.emergentagent.com/api"
