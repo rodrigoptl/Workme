@@ -1947,7 +1947,16 @@ class WorkMeAPITester:
         print(f"   - Admin System: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests), len(admin_tests)))}/{len(admin_tests)} tests passed")
         print(f"   - Search & Discovery: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests), len(search_tests)))}/{len(search_tests)} tests passed")
         print(f"   - Enhanced Booking: {max(0, min(passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests), len(booking_tests)))}/{len(booking_tests)} tests passed")
-        print(f"   - Payment System: {max(0, passed - len(auth_tests) - len(document_tests) - len(portfolio_tests) - len(profile_tests) - len(admin_tests) - len(search_tests) - len(booking_tests))}/{len(payment_tests)} tests passed")
+        
+        # Calculate AI tests passed
+        ai_start = len(auth_tests) + len(document_tests) + len(portfolio_tests) + len(profile_tests) + len(admin_tests) + len(search_tests) + len(booking_tests)
+        ai_passed = max(0, min(passed - ai_start, len(ai_tests)))
+        print(f"   - AI Matching System: {ai_passed}/{len(ai_tests)} tests passed")
+        
+        # Calculate payment tests passed
+        payment_start = ai_start + len(ai_tests)
+        payment_passed = max(0, passed - payment_start)
+        print(f"   - Payment System: {payment_passed}/{len(payment_tests)} tests passed")
         
         print(f"\nEnd-to-End Journey Tests: {journey_passed}/{len(journey_tests)} tests passed")
         print(f"   - Client Journey: {'✅' if journey_passed >= 1 else '❌'}")
