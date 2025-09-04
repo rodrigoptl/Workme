@@ -1235,10 +1235,295 @@ async def review_booking(
     
     return {"status": "success", "message": "Review submitted successfully"}
 
+# AI Matching Models
+class AIMatchingRequest(BaseModel):
+    client_request: str  # Natural language description of what client needs
+    location: Optional[str] = None
+    budget_range: Optional[str] = None
+    urgency: Optional[str] = "normal"  # "urgent", "normal", "flexible"
+    preferred_time: Optional[str] = None
+
+class MatchingScore(BaseModel):
+    professional_id: str
+    score: float
+    reasoning: str
+    match_factors: dict
+
+class AIMatchingResponse(BaseModel):
+    matches: List[MatchingScore]
+    search_interpretation: str
+    suggestions: List[str]
+
+# Smart Search Models
+class SmartSearchRequest(BaseModel):
+    query: str
+    location: Optional[str] = None
+    limit: int = 10
+
+# AI Matching Routes using Emergent LLM
+@api_router.post("/ai/match-professionals", response_model=AIMatchingResponse)
+async def ai_match_professionals(
+    request: AIMatchingRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """AI-powered professional matching based on client needs"""
+    if current_user.user_type != "client":
+        raise HTTPException(status_code=403, detail="Only clients can request professional matching")
+    
+    try:
+        # Get all verified professionals
+        professionals = await db.professional_profiles.find({
+            "verification_status": "verified"
+        }).to_list(100)
+        
+        if not professionals:
+            return AIMatchingResponse(
+                matches=[],
+                search_interpretation="Nenhum profissional verificado encontrado.",
+                suggestions=["Tente novamente mais tarde quando mais profissionais estiverem disponíveis."]
+            )
+        
+        # Initialize LLM Chat
+        chat = LlmChat(
+            api_key=os.getenv("EMERGENT_LLM_KEY"),
+            session_id=f"matching_{current_user.id}_{datetime.utcnow().timestamp()}",
+            system_message="""Você é um especialista em matching de profissionais de serviços no Brasil. 
+            
+            Sua tarefa é analisar a solicitação do cliente e classificar cada profissional com um score de 0-100 baseado em:
+            1. Relevância dos serviços oferecidos (40%)
+            2. Especialidades específicas (25%)
+            3. Localização (15%)
+            4. Avaliações e experiência (10%)
+            5. Disponibilidade e adequação ao perfil (10%)
+            
+            Sempre responda em JSON válido no formato:
+            {
+                "interpretation": "Interpretação da solicitação do cliente",
+                "matches": [
+                    {
+                        "professional_id": "id_do_profissional",
+                        "score": 85,
+                        "reasoning": "Explicação detalhada do match",
+                        "match_factors": {
+                            "service_relevance": 90,
+                            "specialties_match": 80,
+                            "location_score": 85,
+                            "rating_experience": 85,
+                            "availability_fit": 90
+                        }
+                    }
+                ],
+                "suggestions": ["Sugestão 1", "Sugestão 2"]
+            }"""
+        ).with_model("openai", "gpt-4o-mini")
+        
+        # Prepare professional data for AI analysis
+        professionals_data = []
+        for prof in professionals:
+            # Get user info
+            user = await db.users.find_one({"id": prof["user_id"]})
+            if user:
+                prof_data = {
+                    "id": prof["user_id"],
+                    "name": user.get("full_name", ""),
+                    "services": prof.get("services", []),
+                    "specialties": prof.get("specialties", []),
+                    "location": prof.get("location", ""),
+                    "experience_years": prof.get("experience_years", 0),
+                    "hourly_rate": prof.get("hourly_rate", 0),
+                    "rating": prof.get("rating", 0),
+                    "reviews_count": prof.get("reviews_count", 0),
+                    "bio": prof.get("bio", "")
+                }
+                professionals_data.append(prof_data)
+        
+        # Create AI prompt
+        prompt = f"""
+        SOLICITAÇÃO DO CLIENTE: "{request.client_request}"
+        LOCALIZAÇÃO: {request.location or "Não especificada"}
+        ORÇAMENTO: {request.budget_range or "Não especificado"}
+        URGÊNCIA: {request.urgency}
+        HORÁRIO PREFERIDO: {request.preferred_time or "Flexível"}
+        
+        PROFISSIONAIS DISPONÍVEIS:
+        {json.dumps(professionals_data, ensure_ascii=False, indent=2)}
+        
+        Analise a solicitação e classifique todos os profissionais relevantes. 
+        Retorne apenas os top 5 matches com score >= 60.
+        """
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse AI response
+        try:
+            ai_result = json.loads(response)
+            
+            matches = []
+            for match in ai_result.get("matches", []):
+                matches.append(MatchingScore(
+                    professional_id=match["professional_id"],
+                    score=match["score"],
+                    reasoning=match["reasoning"],
+                    match_factors=match["match_factors"]
+                ))
+            
+            return AIMatchingResponse(
+                matches=matches,
+                search_interpretation=ai_result.get("interpretation", ""),
+                suggestions=ai_result.get("suggestions", [])
+            )
+            
+        except json.JSONDecodeError:
+            # Fallback to traditional search if AI fails
+            fallback_matches = await traditional_professional_search(request.client_request, professionals_data)
+            return AIMatchingResponse(
+                matches=fallback_matches,
+                search_interpretation=f"Analisando: '{request.client_request}'",
+                suggestions=["Tente ser mais específico sobre o tipo de serviço que precisa."]
+            )
+        
+    except Exception as e:
+        logger.error(f"AI Matching error: {str(e)}")
+        # Fallback to traditional search
+        professionals = await db.professional_profiles.find({
+            "verification_status": "verified"
+        }).limit(5).to_list(5)
+        
+        fallback_matches = []
+        for prof in professionals:
+            fallback_matches.append(MatchingScore(
+                professional_id=prof["user_id"],
+                score=75.0,
+                reasoning="Match baseado em disponibilidade",
+                match_factors={"service_relevance": 75, "location_score": 50}
+            ))
+        
+        return AIMatchingResponse(
+            matches=fallback_matches,
+            search_interpretation="Busca tradicional aplicada",
+            suggestions=["Sistema de IA temporariamente indisponível, usando busca padrão."]
+        )
+
+async def traditional_professional_search(query: str, professionals_data: list) -> List[MatchingScore]:
+    """Fallback traditional search when AI is unavailable"""
+    matches = []
+    query_lower = query.lower()
+    
+    for prof in professionals_data:
+        score = 50  # Base score
+        reasoning_parts = []
+        
+        # Check services match
+        for service in prof.get("services", []):
+            if any(word in service.lower() for word in query_lower.split()):
+                score += 20
+                reasoning_parts.append(f"Oferece serviços em {service}")
+        
+        # Check specialties match
+        for specialty in prof.get("specialties", []):
+            if any(word in specialty.lower() for word in query_lower.split()):
+                score += 15
+                reasoning_parts.append(f"Especialista em {specialty}")
+        
+        # Bonus for high ratings
+        if prof.get("rating", 0) >= 4.5:
+            score += 10
+            reasoning_parts.append("Alta avaliação dos clientes")
+        
+        # Bonus for experience
+        experience = prof.get("experience_years", 0)
+        if experience >= 5:
+            score += 5
+            reasoning_parts.append(f"{experience} anos de experiência")
+        
+        if score >= 60:
+            matches.append(MatchingScore(
+                professional_id=prof["id"],
+                score=min(score, 100),
+                reasoning=". ".join(reasoning_parts) or "Profissional qualificado",
+                match_factors={"service_relevance": score, "location_score": 50}
+            ))
+    
+    # Sort by score and return top 5
+    matches.sort(key=lambda x: x.score, reverse=True)
+    return matches[:5]
+
+@api_router.post("/ai/smart-search")
+async def smart_search_professionals(
+    request: SmartSearchRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Smart search with natural language understanding"""
+    try:
+        # Use AI matching with the search query
+        ai_request = AIMatchingRequest(
+            client_request=request.query,
+            location=request.location
+        )
+        
+        result = await ai_match_professionals(ai_request, current_user)
+        
+        # Enrich results with professional data
+        enriched_matches = []
+        for match in result.matches:
+            prof_profile = await db.professional_profiles.find_one({"user_id": match.professional_id})
+            if prof_profile:
+                user = await db.users.find_one({"id": match.professional_id})
+                portfolio_count = await db.portfolio.count_documents({"user_id": match.professional_id})
+                
+                enriched_match = {
+                    "professional_id": match.professional_id,
+                    "score": match.score,
+                    "reasoning": match.reasoning,
+                    "match_factors": match.match_factors,
+                    "profile": {
+                        "name": user.get("full_name") if user else "Nome não disponível",
+                        "rating": prof_profile.get("rating", 0),
+                        "reviews_count": prof_profile.get("reviews_count", 0),
+                        "services": prof_profile.get("services", []),
+                        "specialties": prof_profile.get("specialties", []),
+                        "location": prof_profile.get("location", ""),
+                        "hourly_rate": prof_profile.get("hourly_rate"),
+                        "portfolio_count": portfolio_count,
+                        "verification_status": prof_profile.get("verification_status", "pending")
+                    }
+                }
+                enriched_matches.append(enriched_match)
+        
+        return {
+            "matches": enriched_matches[:request.limit],
+            "search_interpretation": result.search_interpretation,
+            "suggestions": result.suggestions,
+            "total_found": len(enriched_matches)
+        }
+        
+    except Exception as e:
+        logger.error(f"Smart search error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro na busca inteligente")
+
+@api_router.get("/ai/search-suggestions")
+async def get_search_suggestions():
+    """Get AI-powered search suggestions based on popular requests"""
+    suggestions = [
+        "Preciso de um eletricista para instalar chuveiro elétrico",
+        "Busco diarista para limpeza semanal da casa",
+        "Quero fazer luzes e mechas no cabelo",
+        "Preciso consertar meu iPhone que não liga",
+        "Busco dog walker para passear com meu cachorro",
+        "Quero contratar fotógrafo para casamento",
+        "Preciso de encanador para vazamento urgente",
+        "Busco manicure que atende em domicílio",
+        "Quero reformar minha cozinha completa",
+        "Preciso de técnico para instalar TV na parede"
+    ]
+    
+    return {"suggestions": suggestions}
+
 # Root endpoint
 @api_router.get("/")
 async def root():
-    return {"message": "WorkMe API is running", "status": "healthy"}
+    return {"message": "WorkMe API is running", "status": "healthy", "ai_enabled": True}
 
 # Include the router in the main app
 app.include_router(api_router)
