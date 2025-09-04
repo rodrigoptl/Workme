@@ -122,7 +122,7 @@ function AppContent() {
 
   return (
     <NavigationContainer>
-      {user ? <MainTabs /> : <AuthStack />}
+      {user ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }
