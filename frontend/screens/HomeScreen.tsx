@@ -13,12 +13,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBeta } from '../contexts/BetaContext';
 import { Ionicons } from '@expo/vector-icons';
 import FloatingFeedbackButton from '../components/FloatingFeedbackButton';
+import { useRouter } from 'expo-router';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL + '/api';
 
 interface HomeScreenProps {
-  navigation: any;
+  navigation?: any;
 }
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
