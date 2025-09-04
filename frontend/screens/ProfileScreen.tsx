@@ -48,26 +48,24 @@ export default function ProfileScreen() {
         icon: 'person-outline',
         title: 'Editar Perfil',
         subtitle: 'Atualize suas informações',
-        onPress: () => {},
-      },
-      {
-        icon: 'notifications-outline',
-        title: 'Notificações',
-        subtitle: 'Gerencie suas preferências',
-        onPress: () => {},
-      },
-      {
-        icon: 'card-outline',
-        title: 'Carteira Digital',
-        subtitle: 'Saldo e histórico de pagamentos',
-        onPress: () => {},
+        onPress: () => {
+          if (user?.user_type === 'professional') {
+            navigation.navigate('ProfessionalProfile');
+          }
+        },
       },
       ...(user?.user_type === 'professional' ? [
         {
           icon: 'document-text-outline',
           title: 'Documentos',
           subtitle: 'Verificação e certificados',
-          onPress: () => {},
+          onPress: () => navigation.navigate('Documents'),
+        },
+        {
+          icon: 'images-outline',
+          title: 'Portfólio',
+          subtitle: 'Galeria dos seus trabalhos',
+          onPress: () => navigation.navigate('Portfolio'),
         },
         {
           icon: 'star-outline',
@@ -89,6 +87,24 @@ export default function ProfileScreen() {
           onPress: () => {},
         },
       ]),
+      {
+        icon: 'notifications-outline',
+        title: 'Notificações',
+        subtitle: 'Gerencie suas preferências',
+        onPress: () => {},
+      },
+      {
+        icon: 'card-outline',
+        title: 'Carteira Digital',
+        subtitle: 'Saldo e histórico de pagamentos',
+        onPress: () => {},
+      },
+      {
+        icon: 'shield-outline',
+        title: 'Painel Admin',
+        subtitle: 'Acesso administrativo (demo)',
+        onPress: () => navigation.navigate('Admin'),
+      },
       {
         icon: 'help-circle-outline',
         title: 'Suporte',
