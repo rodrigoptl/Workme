@@ -137,6 +137,11 @@ function MainStack() {
         component={AdminScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen 
+        name="BetaAdmin" 
+        component={BetaAdminScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }
