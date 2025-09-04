@@ -560,11 +560,12 @@ class WorkMeAPITester:
     
     def run_all_tests(self):
         """Run all tests in sequence"""
-        print(f"🚀 Starting WorkMe API Tests")
+        print(f"🚀 Starting WorkMe API Tests - Authentication & Payment System")
         print(f"Backend URL: {self.base_url}")
-        print("=" * 60)
+        print("=" * 80)
         
-        tests = [
+        # Authentication tests
+        auth_tests = [
             self.test_health_check,
             self.test_user_registration_client,
             self.test_user_registration_professional,
@@ -576,19 +577,45 @@ class WorkMeAPITester:
             self.test_client_profile
         ]
         
-        passed = 0
-        total = len(tests)
+        # Payment system tests
+        payment_tests = [
+            self.test_wallet_management,
+            self.test_stripe_config,
+            self.test_payment_intent_creation,
+            self.test_deposit_functionality,
+            self.test_withdrawal_functionality,
+            self.test_transaction_history,
+            self.test_service_booking_escrow
+        ]
         
-        for test in tests:
+        all_tests = auth_tests + payment_tests
+        
+        passed = 0
+        total = len(all_tests)
+        
+        print("🔐 Running Authentication Tests...")
+        print("-" * 40)
+        
+        for test in auth_tests:
             if test():
                 passed += 1
             print()  # Add spacing between tests
         
-        print("=" * 60)
+        print("\n💳 Running Payment System Tests...")
+        print("-" * 40)
+        
+        for test in payment_tests:
+            if test():
+                passed += 1
+            print()  # Add spacing between tests
+        
+        print("=" * 80)
         print(f"📊 Test Results: {passed}/{total} tests passed")
+        print(f"   - Authentication: {min(passed, len(auth_tests))}/{len(auth_tests)} tests passed")
+        print(f"   - Payment System: {max(0, passed - len(auth_tests))}/{len(payment_tests)} tests passed")
         
         if passed == total:
-            print("🎉 All tests passed! Authentication system is working correctly.")
+            print("🎉 All tests passed! WorkMe system is working correctly.")
         else:
             print("⚠️  Some tests failed. Check the details above.")
         
