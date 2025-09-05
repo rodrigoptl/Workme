@@ -19,8 +19,15 @@ from decimal import Decimal
 import json
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+# Import Sentry configuration
+from sentry_config import init_sentry
+from health_check import router as health_router
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Initialize Sentry for error tracking
+init_sentry()
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
