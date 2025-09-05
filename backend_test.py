@@ -1793,6 +1793,254 @@ class WorkMeAPITester:
             self.log_result("Beta Environment Info", False, "Beta environment request failed", str(e))
             return False
     
+    def test_beta_access_code_validation(self):
+        """Test POST /api/beta/validate-access - Beta Access Code Validation"""
+        try:
+            # Test valid beta access code
+            valid_code = "WORKME2025BETA"
+            response = self.session.post(f"{self.base_url}/beta/validate-access", 
+                                       params={"access_code": valid_code})
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "valid" in data and "message" in data:
+                    if data["valid"] == True:
+                        self.log_result("Beta Access Code Validation (Valid)", True, 
+                                      f"Valid beta code accepted: {data['message']}")
+                    else:
+                        self.log_result("Beta Access Code Validation (Valid)", False, 
+                                      f"Valid beta code rejected: {data['message']}")
+                        return False
+                else:
+                    self.log_result("Beta Access Code Validation (Valid)", False, 
+                                  "Invalid validation response format", data)
+                    return False
+            else:
+                self.log_result("Beta Access Code Validation (Valid)", False, 
+                              f"Beta validation failed with status {response.status_code}", response.text)
+                return False
+            
+            # Test invalid beta access code
+            invalid_code = "INVALID_CODE_123"
+            response = self.session.post(f"{self.base_url}/beta/validate-access", 
+                                       params={"access_code": invalid_code})
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "valid" in data and data["valid"] == False:
+                    self.log_result("Beta Access Code Validation (Invalid)", True, 
+                                  f"Invalid beta code correctly rejected: {data['message']}")
+                    return True
+                else:
+                    self.log_result("Beta Access Code Validation (Invalid)", False, 
+                                  f"Invalid beta code incorrectly accepted: {data}")
+                    return False
+            else:
+                self.log_result("Beta Access Code Validation (Invalid)", False, 
+                              f"Beta validation failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Access Code Validation", False, "Beta validation request failed", str(e))
+            return False
+    
+    def test_beta_registration_client_with_code(self):
+        """Test client registration with valid beta access code"""
+        try:
+            import time
+            timestamp = int(time.time())
+            
+            user_data = {
+                "email": f"beta.client.{timestamp}@email.com",
+                "full_name": "Beta Client User",
+                "phone": "+55 11 99999-0001",
+                "user_type": "client",
+                "password": "BetaPass123!",
+                "beta_access_code": "WORKME2025BETA"
+            }
+            
+            response = self.session.post(f"{self.base_url}/auth/register", json=user_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "access_token" in data and "user" in data:
+                    user = data["user"]
+                    # Verify beta user flag is set
+                    if user.get("is_beta_user") == True and user.get("beta_joined_at"):
+                        self.test_beta_client = user
+                        self.beta_client_token = data["access_token"]
+                        self.log_result("Beta Client Registration", True, 
+                                      f"Beta client registered successfully with is_beta_user: {user['is_beta_user']}")
+                        return True
+                    else:
+                        self.log_result("Beta Client Registration", False, 
+                                      f"Beta flags not set correctly: is_beta_user={user.get('is_beta_user')}, beta_joined_at={user.get('beta_joined_at')}")
+                        return False
+                else:
+                    self.log_result("Beta Client Registration", False, "Invalid registration response format", data)
+                    return False
+            else:
+                self.log_result("Beta Client Registration", False, 
+                              f"Beta client registration failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Client Registration", False, "Beta client registration request failed", str(e))
+            return False
+    
+    def test_beta_registration_professional_with_code(self):
+        """Test professional registration with valid beta access code"""
+        try:
+            import time
+            timestamp = int(time.time())
+            
+            user_data = {
+                "email": f"beta.professional.{timestamp}@email.com",
+                "full_name": "Beta Professional User",
+                "phone": "+55 11 88888-0002",
+                "user_type": "professional",
+                "password": "BetaPass456!",
+                "beta_access_code": "WORKME2025BETA"
+            }
+            
+            response = self.session.post(f"{self.base_url}/auth/register", json=user_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "access_token" in data and "user" in data:
+                    user = data["user"]
+                    # Verify beta user flag is set
+                    if user.get("is_beta_user") == True and user.get("beta_joined_at"):
+                        self.test_beta_professional = user
+                        self.beta_professional_token = data["access_token"]
+                        self.log_result("Beta Professional Registration", True, 
+                                      f"Beta professional registered successfully with is_beta_user: {user['is_beta_user']}")
+                        return True
+                    else:
+                        self.log_result("Beta Professional Registration", False, 
+                                      f"Beta flags not set correctly: is_beta_user={user.get('is_beta_user')}, beta_joined_at={user.get('beta_joined_at')}")
+                        return False
+                else:
+                    self.log_result("Beta Professional Registration", False, "Invalid registration response format", data)
+                    return False
+            else:
+                self.log_result("Beta Professional Registration", False, 
+                              f"Beta professional registration failed with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta Professional Registration", False, "Beta professional registration request failed", str(e))
+            return False
+    
+    def test_beta_user_count_verification(self):
+        """Test that beta user count increases correctly after registrations"""
+        try:
+            response = self.session.get(f"{self.base_url}/beta/environment")
+            
+            if response.status_code == 200:
+                data = response.json()
+                current_beta_count = data.get("beta_users_count", 0)
+                
+                # Check if count increased (should be at least initial + 2 for the two users we registered)
+                expected_minimum = getattr(self, 'initial_beta_count', 0) + 2
+                
+                if current_beta_count >= expected_minimum:
+                    self.log_result("Beta User Count Verification", True, 
+                                  f"Beta user count increased correctly: {current_beta_count} (expected >= {expected_minimum})")
+                    return True
+                else:
+                    self.log_result("Beta User Count Verification", False, 
+                                  f"Beta user count not increased: {current_beta_count} (expected >= {expected_minimum})")
+                    return False
+            else:
+                self.log_result("Beta User Count Verification", False, 
+                              f"Failed to get beta environment info with status {response.status_code}", response.text)
+                return False
+                
+        except Exception as e:
+            self.log_result("Beta User Count Verification", False, "Beta user count verification failed", str(e))
+            return False
+    
+    def test_registration_without_beta_code(self):
+        """Test registration without beta code fails in beta environment"""
+        try:
+            import time
+            timestamp = int(time.time())
+            
+            user_data = {
+                "email": f"no.beta.code.{timestamp}@email.com",
+                "full_name": "No Beta Code User",
+                "phone": "+55 11 77777-0003",
+                "user_type": "client",
+                "password": "NoBetaPass123!"
+                # No beta_access_code provided
+            }
+            
+            response = self.session.post(f"{self.base_url}/auth/register", json=user_data)
+            
+            if response.status_code == 403:
+                error_message = response.text
+                if "beta" in error_message.lower() or "código" in error_message.lower():
+                    self.log_result("Registration Without Beta Code", True, 
+                                  "Registration correctly rejected without beta code")
+                    return True
+                else:
+                    self.log_result("Registration Without Beta Code", False, 
+                                  f"Wrong error message: {error_message}")
+                    return False
+            elif response.status_code == 200:
+                self.log_result("Registration Without Beta Code", False, 
+                              "Registration incorrectly allowed without beta code")
+                return False
+            else:
+                self.log_result("Registration Without Beta Code", False, 
+                              f"Unexpected status code {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Registration Without Beta Code", False, "Registration test failed", str(e))
+            return False
+    
+    def test_registration_with_invalid_beta_code(self):
+        """Test registration with wrong beta code fails properly"""
+        try:
+            import time
+            timestamp = int(time.time())
+            
+            user_data = {
+                "email": f"wrong.beta.code.{timestamp}@email.com",
+                "full_name": "Wrong Beta Code User",
+                "phone": "+55 11 66666-0004",
+                "user_type": "client",
+                "password": "WrongBetaPass123!",
+                "beta_access_code": "WRONG_BETA_CODE_2025"
+            }
+            
+            response = self.session.post(f"{self.base_url}/auth/register", json=user_data)
+            
+            if response.status_code == 403:
+                error_message = response.text
+                if "beta" in error_message.lower() or "código" in error_message.lower() or "inválido" in error_message.lower():
+                    self.log_result("Registration With Invalid Beta Code", True, 
+                                  "Registration correctly rejected with invalid beta code")
+                    return True
+                else:
+                    self.log_result("Registration With Invalid Beta Code", False, 
+                                  f"Wrong error message: {error_message}")
+                    return False
+            elif response.status_code == 200:
+                self.log_result("Registration With Invalid Beta Code", False, 
+                              "Registration incorrectly allowed with invalid beta code")
+                return False
+            else:
+                self.log_result("Registration With Invalid Beta Code", False, 
+                              f"Unexpected status code {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_result("Registration With Invalid Beta Code", False, "Registration test failed", str(e))
+            return False
+    
     def test_beta_analytics_tracking(self):
         """Test POST /api/beta/analytics/track - Beta Analytics Tracking"""
         if not self.auth_token:
