@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../../
+      dockerfile: docker/production/Dockerfile.backend
+    container_name: workme-backend-production
+    restart: unless-stopped
+    env_file:
+      - ../../backend/.env.production
+    environment:
+      - ENVIRONMENT=production
+      - DB_NAME=workme_production
+    ports:
+      - "8001:8001"
+    volumes:
+      - production_logs:/var/log/workme
+      - production_uploads:/app/uploads
+    networks:
+      - workme-production
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  redis:
+    image: redis:7-alpine
+    container_name: workme-redis-production
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - production_redis_data:/data
+    networks:
+      - workme-production
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  nginx:
+    image: nginx:alpine
+    container_name: workme-nginx-production
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../nginx/production.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - production_logs:/var/log/nginx
+    networks:
+      - workme-production
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+volumes:
+  production_logs:
+    driver: local
+  production_uploads:
+    driver: local
+  production_redis_data:
+    driver: local
+
+networks:
+  workme-production:
+    driver: bridge
