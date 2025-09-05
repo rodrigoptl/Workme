@@ -1776,6 +1776,8 @@ class WorkMeAPITester:
                         # Check if beta_spots_remaining calculation is correct
                         expected_spots = max(0, max_beta_users - beta_users_count)
                         if beta_spots_remaining == expected_spots:
+                            # Store initial beta count for later verification
+                            self.initial_beta_count = beta_users_count
                             self.log_result("Beta Environment Info", True, 
                                           f"Beta environment info retrieved: {environment}, {beta_users_count}/{max_beta_users} users, {beta_spots_remaining} spots remaining")
                             return True
