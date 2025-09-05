@@ -53,6 +53,11 @@ class WorkMeAPITester:
         self.auth_token = None
         self.test_user_client = None
         self.test_user_professional = None
+        self.test_beta_client = None
+        self.test_beta_professional = None
+        self.beta_client_token = None
+        self.beta_professional_token = None
+        self.initial_beta_count = 0
         
     def log_result(self, test_name, success, message, details=None):
         """Log test result"""
