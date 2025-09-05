@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../../
+      dockerfile: docker/production/Dockerfile.backend
+    container_name: workme-backend-staging
+    restart: unless-stopped
+    env_file:
+      - ../../backend/.env.staging
+    environment:
+      - ENVIRONMENT=staging
+      - DB_NAME=workme_staging
+    ports:
+      - "8001:8001"
+    volumes:
+      - staging_logs:/var/log/workme
+      - staging_uploads:/app/uploads
+    networks:
+      - workme-staging
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: workme-redis-staging
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - staging_redis_data:/data
+    networks:
+      - workme-staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: workme-nginx-staging
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../nginx/staging.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - staging_logs:/var/log/nginx
+    networks:
+      - workme-staging
+    depends_on:
+      - backend
+
+volumes:
+  staging_logs:
+    driver: local
+  staging_uploads:
+    driver: local
+  staging_redis_data:
+    driver: local
+
+networks:
+  workme-staging:
+    driver: bridge
