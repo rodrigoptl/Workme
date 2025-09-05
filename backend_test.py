@@ -2429,6 +2429,12 @@ class WorkMeAPITester:
         # Beta Environment tests
         beta_tests = [
             self.test_beta_environment_info,
+            self.test_beta_access_code_validation,
+            self.test_beta_registration_client_with_code,
+            self.test_beta_registration_professional_with_code,
+            self.test_beta_user_count_verification,
+            self.test_registration_without_beta_code,
+            self.test_registration_with_invalid_beta_code,
             self.test_beta_analytics_tracking,
             self.test_beta_feedback_submission,
             self.test_beta_admin_stats,
