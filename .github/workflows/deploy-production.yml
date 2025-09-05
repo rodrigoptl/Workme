@@ -1,0 +1,190 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: workme-backend
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run comprehensive tests
+      env:
+        MONGO_URL: mongodb://root:password@localhost:27017/
+        DB_NAME: workme_test
+        SECRET_KEY: test-secret-key
+        STRIPE_SECRET_KEY: sk_test_fake
+        STRIPE_PUBLISHABLE_KEY: pk_test_fake
+        EMERGENT_LLM_KEY: test-key
+      run: |
+        cd backend
+        python -m pytest tests/ -v --cov=./ --cov-report=xml --cov-fail-under=80
+
+  build:
+    needs: [security-scan, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=tag
+          type=sha,prefix=prod-
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/production/Dockerfile.backend
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - name: Create deployment snapshot
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        port: 22
+        script: |
+          # Create snapshot for rollback
+          doctl compute droplet-action snapshot ${{ secrets.DROPLET_ID }} --snapshot-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" --wait
+    
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        port: 22
+        script: |
+          # Navigate to application directory
+          cd /var/www/workme/production
+          
+          # Pull latest images
+          docker pull ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:prod-${{ github.sha }}
+          
+          # Update docker-compose with new image
+          sed -i "s|image: .*|image: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:prod-${{ github.sha }}|" docker-compose.yml
+          
+          # Deploy with zero downtime
+          docker-compose up -d --no-deps backend
+          
+          # Wait for health check
+          sleep 45
+          
+          # Verify deployment
+          curl -f https://api.workme.com.br/api/health || exit 1
+          
+          # Update nginx and other services
+          docker-compose up -d
+    
+    - name: Run smoke tests
+      run: |
+        # Wait for all services
+        sleep 60
+        
+        # Test critical endpoints
+        curl -f https://api.workme.com.br/api/health
+        curl -f https://api.workme.com.br/api/auth/health
+        curl -f https://api.workme.com.br/api/payment/stripe/config
+    
+    - name: Notify deployment success
+      uses: 8398a7/action-slack@v3
+      if: success()
+      with:
+        status: success
+        text: '🚀 Production deployment successful!'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    
+    - name: Notify deployment failure
+      uses: 8398a7/action-slack@v3
+      if: failure()
+      with:
+        status: failure
+        text: '❌ Production deployment failed! Manual intervention required.'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Create Sentry release
+      uses: getsentry/action-release@v1
+      if: success()
+      env:
+        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        SENTRY_ORG: workme
+        SENTRY_PROJECT: workme-backend
+      with:
+        environment: production
+        version: ${{ github.sha }}
