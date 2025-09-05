@@ -19,7 +19,7 @@ interface RegisterScreenProps {
   navigation: any;
 }
 
-export default function RegisterScreen({ navigation }: RegisterScreenProps) {
+export default function RegisterScreen() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -31,6 +31,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
+  const router = useRouter();
 
   const handleRegister = async () => {
     if (!formData.email || !formData.password || !formData.full_name || !formData.phone || !formData.beta_access_code) {
